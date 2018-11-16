@@ -13,6 +13,9 @@ DEPENDS = $(OBJECTS:.o=.d)
 
 default: $(TARGET) clean
 
+debug: CFLAGS += -ggdb
+debug: $(TARGET)
+
 $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
@@ -20,6 +23,7 @@ $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 .PHONY: clean
+.PHONY: debug
 
 clean:
 	rm -f $(OBJECTS) $(DEPENDS)
