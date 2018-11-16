@@ -2,6 +2,9 @@
 /* 情報工学科3年 学籍番号61610117 杉浦 圭祐 */
 /* util.h */
 
+#include <stdarg.h>
+#include <stdbool.h>
+
 #ifndef UTIL_H
 #define UTIL_H
 
@@ -12,6 +15,19 @@
 #ifndef min
 #define min(a, b)   (((a) < (b)) ? (a) : (b))
 #endif /* min */
+
+/*
+ * 文字列のカラー出力
+ */
+#define ANSI_ESCAPE_COLOR_BLACK     "\033[0;30m"
+#define ANSI_ESCAPE_COLOR_RED       "\033[1;31m"
+#define ANSI_ESCAPE_COLOR_GREEN     "\033[1;32m"
+#define ANSI_ESCAPE_COLOR_YELLOW    "\033[1;33m"
+#define ANSI_ESCAPE_COLOR_BLUE      "\033[1;34m"
+#define ANSI_ESCAPE_COLOR_MAGENTA   "\033[1;35m"
+#define ANSI_ESCAPE_COLOR_CYAN      "\033[1;36m"
+#define ANSI_ESCAPE_COLOR_GRAY      "\033[1;37m"
+#define ANSI_ESCAPE_COLOR_RESET     "\033[0m"
 
 /*
  * 空白文字かどうかを判定

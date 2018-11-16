@@ -108,6 +108,8 @@ bool append_argument(struct simple_command* simple_cmd, const char* arg)
     simple_cmd->arguments[simple_cmd->num_arguments] = new_argument;
     simple_cmd->num_arguments++;
     simple_cmd->arguments[simple_cmd->num_arguments] = NULL;
+
+    return true;
 }
 
 /*
@@ -131,6 +133,8 @@ bool initialize_shell_command(struct shell_command* shell_cmd)
     shell_cmd->redir_info.input_file_name = NULL;
     shell_cmd->redir_info.output_file_name = NULL;
     shell_cmd->redir_info.append_output = false;
+
+    return true;
 }
 
 /*
@@ -169,7 +173,8 @@ void free_shell_command(struct shell_command* shell_cmd)
  * コマンドを追加
  * 成功した場合はtrue, 失敗した場合はfalseを返す
  */
-bool append_simple_command(struct shell_command* shell_cmd, struct simple_command* simple_cmd)
+bool append_simple_command(
+    struct shell_command* shell_cmd, struct simple_command* simple_cmd)
 {
     int capacity_simple_commands;
     struct simple_command* new_simple_commands;
@@ -259,7 +264,7 @@ void free_command(struct command* cmd)
  * 成功した場合はtrue, 失敗した場合はfalseを返す
  */
 bool append_shell_command(
-    struct command* cmd, struct simple_command_list* shell_cmd)
+    struct command* cmd, struct shell_command* shell_cmd)
 {
     int capacity_shell_commands;
     struct shell_command* new_shell_commands;
@@ -311,17 +316,117 @@ bool append_shell_command(
  */
 bool parse_command(struct token_stream* tok_stream, struct command* cmd)
 {
-    struct token* tok;
+    struct token* tok_op;
     struct shell_command shell_cmd;
     
-    do {
-        /* シェルコマンドの解析 */
-        if (!parse_shell_command(tok_stream, &shell_cmd))
-            return false;
-        
-        /* TODO */
-    } while (token_stream_move_next(tok_stream));
+    assert(tok_stream != NULL);
+    assert(cmd != NULL);
+    
+    print_message(__func__, "called\n");
 
+    /* コマンドを初期化 */
+    if (!initialize_command(cmd)) {
+        print_error(__func__, "initialize_command() failed\n");
+        return false;
+    }
+
+    /* シェルコマンドを初期化 */
+    if (!initialize_shell_command(&shell_cmd)) {
+        print_error(__func__, "initialize_shell_command() failed\n");
+        return false;
+    }
+
+    /* 最低1つ以上のシェルコマンドがない場合はエラー */
+    if (!parse_shell_command(tok_stream, &shell_cmd)) {
+        print_error(__func__, "no command is given\n");
+        return false;
+    }
+    
+    while (1) {
+        /* トークンがなければ終了 */
+        if (token_stream_end_of_stream(tok_stream)) {
+            /* シェルコマンドの実行方法を指定 */
+            shell_cmd.exec_flags = EXECUTION_FLAGS_NONE;
+
+            /* シェルコマンドを追加 */
+            if (!append_shell_command(cmd, &shell_cmd)) {
+                print_error(__func__, "append_shell_command() failed\n");
+                return false;
+            }
+
+            return true;
+        }
+
+        /* トークンストリームからトークンを取得 */
+        /* トークンがなければエラー */
+        if ((tok_op = token_stream_get_current_token(tok_stream)) == NULL) {
+            print_error(__func__, "no more tokens, operator expected\n");
+            return false;
+        }
+
+        /* トークンが'&&', '||', '&', ';'のいずれかではない場合はエラー */
+        if (tok_op->type != TOKEN_TYPE_AND_AND &&
+            tok_op->type != TOKEN_TYPE_OR &&
+            tok_op->type != TOKEN_TYPE_AND &&
+            tok_op->type != TOKEN_TYPE_SEMICOLON) {
+            print_error(__func__,
+                "invalid token type: %s, type %s, %s, %s, %s expected\n",
+                token_type_to_string(tok_op->type),
+                token_type_to_string(TOKEN_TYPE_AND_AND),
+                token_type_to_string(TOKEN_TYPE_OR),
+                token_type_to_string(TOKEN_TYPE_AND),
+                token_type_to_string(TOKEN_TYPE_SEMICOLON));
+            return false;
+        }
+
+        /* トークンの種別に従って実行方法を決定 */
+        switch (tok_op->type) {
+            case TOKEN_TYPE_AND_AND:
+                /* コマンドの正常終了時に次のコマンドを実行 */
+                shell_cmd.exec_flags = EXECUTE_NEXT_WHEN_SUCCEEDED;
+                break;
+            case TOKEN_TYPE_OR:
+                /* コマンドの異常終了時に次のコマンドを実行 */
+                shell_cmd.exec_flags = EXECUTE_NEXT_WHEN_FAILED;
+                break;
+            case TOKEN_TYPE_AND:
+                /* コマンドをバックグラウンドで実行 */
+                shell_cmd.exec_flags = EXECUTE_IN_BACKGROUND;
+                break;
+            case TOKEN_TYPE_SEMICOLON:
+                /* コマンドを前から順番に実行 */
+                shell_cmd.exec_flags = EXECUTE_SEQUENTIALLY;
+                break;
+            default:
+                assert(false);
+                break;
+        }
+
+        /* ここでシェルコマンドを追加 */
+        if (!append_shell_command(cmd, &shell_cmd)) {
+            print_error(__func__, "append_shell_command() failed\n");
+            return false;
+        }
+
+        /* トークンを1つ先に進める */
+        if (!token_stream_move_next(tok_stream)) {
+            /* 末尾がバックグラウンド実行またはセミコロンである場合は返す */
+            /* それ以外の場合は後続のシェルコマンドが必要なのでエラー */
+            if (tok_op->type == TOKEN_TYPE_AND ||
+                tok_op->type == TOKEN_TYPE_SEMICOLON)
+                return true;
+
+            print_error(__func__, "no more tokens, command expected\n");
+            return false;
+        }
+
+        /* シェルコマンドを解析 */
+        if (!parse_shell_command(tok_stream, &shell_cmd)) {
+            print_error(__func__, "parse_shell_command() failed\n");
+            return false;
+        }
+    }
+    
     return true;
 }
 
@@ -330,18 +435,146 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
  * <ShellCommand> ::= <SimpleCommandList>
  * <SimpleCommandList> ::= <SimpleCommand> ['|' <SimpleCommand>]*
  */
-bool parse_shell_command(struct token_stream* tok_stream, struct shell_command* shell_cmd)
+bool parse_shell_command(
+    struct token_stream* tok_stream, struct shell_command* shell_cmd)
 {
+    struct token* tok;
+    struct simple_command simple_cmd;
+
+    assert(tok_stream != NULL);
+    assert(shell_cmd != NULL);
+
+    print_message(__func__, "called\n");
+
+    /* コマンドを初期化 */
+    if (!initialize_simple_command(&simple_cmd)) {
+        print_error(__func__, "initialize_simple_command() failed\n");
+        return false;
+    }
+    
+    /* 最低1つ以上のコマンドがない場合はエラー */
+    if (!parse_simple_command(tok_stream, &simple_cmd, &shell_cmd->redir_info)) {
+        print_error(__func__, "no command is given\n");
+        return false;
+    }
+
+    /* コマンドを追加 */
+    if (!append_simple_command(shell_cmd, &simple_cmd)) {
+        print_error(__func__, "append_simple_command() failed\n");
+        return false;
+    }
+    
+    while (1) {
+        /* トークンがなければ終了 */
+        if (token_stream_end_of_stream(tok_stream))
+            return true;
+
+        /* トークンストリームからトークンを取得 */
+        /* トークンがなければエラー */
+        if ((tok = token_stream_get_current_token(tok_stream)) == NULL) {
+            print_error(__func__, "no more tokens, pipe expected\n");
+            return false;
+        }
+
+        /* トークンがパイプでない場合は返す */
+        if (tok->type != TOKEN_TYPE_PIPE)
+            return true;
+
+        /* トークンを1つ先に進める */
+        /* トークンがなければエラー */
+        if (!token_stream_move_next(tok_stream)) {
+            print_error(__func__, "no more tokens, identifier expected\n");
+            return false;
+        }
+
+        /* コマンドを解析 */
+        if (!parse_simple_command(tok_stream, &simple_cmd, &shell_cmd->redir_info)) {
+            print_error(__func__, "parse_simple_command() failed\n");
+            return false;
+        }
+
+        /* コマンドを追加 */
+        if (!append_simple_command(shell_cmd, &simple_cmd)) {
+            print_error(__func__, "append_simple_command() failed\n");
+            return false;
+        }
+    }
+
     return true;
 }
 
 /*
  * 各コマンドの構文解析
- * <SimpleCommand> ::= <SimpleCommandElement> [<SimpleCommandElement>]*
+ * <SimpleCommand> ::= <Identifier> [<SimpleCommandElement>]*
  * <SimpleCommandElement> ::= <Identifier> | <Redirection>
  */
-bool parse_simple_command(struct token_stream* tok_stream, struct simple_command* simple_cmd)
+bool parse_simple_command(
+    struct token_stream* tok_stream,
+    struct simple_command* simple_cmd,
+    struct redirect_info* redir_info)
 {
+    struct token* tok;
+
+    assert(tok_stream != NULL);
+    assert(simple_cmd != NULL);
+
+    print_message(__func__, "called\n");
+
+    /* トークンストリームからトークンを取得 */
+    /* トークンがなければエラー */
+    if ((tok = token_stream_get_current_token(tok_stream)) == NULL) {
+        print_error(__func__, "no more tokens, identifier or redirection expected\n");
+        return false;
+    }
+
+    /* 識別子(実行ファイル名)でなければエラー */
+    if (tok->type != TOKEN_TYPE_ARGUMENT) {
+        print_error(__func__, "invalid token: %s, identifier expected\n", tok->str);
+        return false;
+    }
+
+    /* 識別子をコマンド引数として追加 */
+    if (!append_argument(simple_cmd, tok->str)) {
+        print_error(__func__, "append_argument() failed\n");
+        return false;
+    }
+
+    /* トークンを1つ読み進める */
+    /* トークンが残っていなければ返す */
+    if (!token_stream_move_next(tok_stream))
+        return true;
+
+    while (1) {
+        /* 存在するはずのトークンがなければエラー */
+        if ((tok = token_stream_get_current_token(tok_stream)) == NULL) {
+            print_error(__func__, "no more tokens, identifier or redirection expected\n");
+            return false;
+        }
+
+        if (tok->type != TOKEN_TYPE_ARGUMENT) {
+            /* トークンが識別子またはリダイレクト記号でなければ返す */
+            /* parse_redirect関数はトークンストリームのインデックスを,
+             * 次に読むべきトークンの位置まで進めてくれる */
+            if (!parse_redirect(tok_stream, redir_info))
+                return true;
+
+            /* トークンが残っていなければ返す */
+            if (token_stream_end_of_stream(tok_stream))
+                return true;
+        } else {
+            /* 識別子をコマンド引数として追加 */
+            if (!append_argument(simple_cmd, tok->str)) {
+                print_error(__func__, "append_argument() failed\n");
+                return false;
+            }
+
+            /* トークンを1つ読み進める */
+            /* トークンが残っていなければ返す */
+            if (!token_stream_move_next(tok_stream))
+                return true;
+        }
+    }
+
     return true;
 }
 
@@ -351,18 +584,21 @@ bool parse_simple_command(struct token_stream* tok_stream, struct simple_command
  *                 | '<' <Identifier>
  *                 | '>>' <Identifier>
  */
-bool parse_redirect(struct token_stream* tok_stream, struct redirect_info* redir_info)
+bool parse_redirect(
+    struct token_stream* tok_stream, struct redirect_info* redir_info)
 {
     struct token* tok_redir_op;
     struct token* tok_file_name;
 
     assert(tok_stream != NULL);
-    assert(redirect_info != NULL);
+    assert(redir_info != NULL);
+
+    print_message(__func__, "called\n");
 
     /* トークンストリームからトークンを取得 */
     /* トークンがなければエラー */
     if ((tok_redir_op = token_stream_get_current_token(tok_stream)) == NULL) {
-        print_error(__func__, "no more tokens, redirect operator expected\n");
+        /* print_error(__func__, "no more tokens, redirect operator expected\n"); */
         return false;
     }
 
@@ -373,6 +609,7 @@ bool parse_redirect(struct token_stream* tok_stream, struct redirect_info* redir
         print_error(__func__, "invalid token type: %s, redirect operator expected\n",
                     token_type_to_string(tok_redir_op->type));
         return false;
+    }
 
     /* トークンを1つ読み進める */
     /* トークンがなければエラー */
@@ -392,6 +629,8 @@ bool parse_redirect(struct token_stream* tok_stream, struct redirect_info* redir
     if (tok_file_name->type != TOKEN_TYPE_ARGUMENT) {
         print_error(__func__, "invalid token type: %s, identifier (file name) expected\n",
                     token_type_to_string(tok_file_name->type));
+        /* 正常に読み取れたところまでトークンストリームのインデックスを復元 */
+        token_stream_move_previous(tok_stream);
         return false;
     }
 
@@ -412,6 +651,7 @@ bool parse_redirect(struct token_stream* tok_stream, struct redirect_info* redir
 
             if (redir_info->output_file_name == NULL) {
                 print_error(__func__, "strdup() failed: %s\n", strerror(errno));
+                token_stream_move_previous(tok_stream);
                 return false;
             }
 
@@ -420,10 +660,46 @@ bool parse_redirect(struct token_stream* tok_stream, struct redirect_info* redir
             break;
         case TOKEN_TYPE_GREAT_GREAT:
             /* 標準出力のリダイレクト(追記) */
+            /* 以前の設定内容が残っている場合は消去 */
+            if (redir_info->output_file_name != NULL) {
+                free(redir_info->output_file_name);
+                redir_info->output_file_name = NULL;
+            }
+            
+            /* 出力先のファイル名を指定 */
+            redir_info->output_file_name = strdup(tok_file_name->str);
+
+            if (redir_info->output_file_name == NULL) {
+                print_error(__func__, "strdup() failed: %s\n", strerror(errno));
+                token_stream_move_previous(tok_stream);
+                return false;
+            }
+
+            /* 出力先のファイルには追記される */
+            redir_info->append_output = true;
             break;
         case TOKEN_TYPE_LESS:
             /* 標準入力のリダイレクト */
+            /* 以前の設定内容が残っている場合は消去 */
+            if (redir_info->input_file_name != NULL) {
+                free(redir_info->input_file_name);
+                redir_info->input_file_name = NULL;
+            }
+
+            /* 入力元のファイル名を指定 */
+            redir_info->input_file_name = strdup(tok_file_name->str);
+
+            if (redir_info->input_file_name == NULL) {
+                print_error(__func__, "strdup() failed: %s\n", strerror(errno));
+                token_stream_move_previous(tok_stream);
+                return false;
+            }
+
             break;
+        default:
+            assert(false);
+            break;
+    }
 
     /* トークンを1つ読み進める */
     token_stream_move_next(tok_stream);

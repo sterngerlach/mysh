@@ -106,10 +106,22 @@ bool token_stream_has_more_tokens(
     struct token_stream* tok_stream);
 
 /*
+ * トークンストリームのトークンを最後まで読み取ったかどうかを判定
+ */
+bool token_stream_end_of_stream(
+    struct token_stream* tok_stream);
+
+/*
  * トークンストリームから現在のトークンを取得
  */
 struct token* token_stream_get_current_token(
     struct token_stream* tok_stream);
+
+/*
+ * トークンストリームのインデックスを指定
+ */
+bool token_stream_set_current_index(
+    struct token_stream* tok_stream, size_t index);
 
 /*
  * トークンストリームを1つ次に進める

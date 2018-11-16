@@ -15,7 +15,7 @@
  * <ShellCommand> ::= <SimpleCommandList>
  * <ShellCommandOp> ::= '&&' | '||' | '&' | ';'
  * <SimpleCommandList> ::= <SimpleCommand> ['|' <SimpleCommand>]*
- * <SimpleCommand> ::= <SimpleCommandElement> [<SimpleCommandElement>]*
+ * <SimpleCommand> ::= <Identifier> [<SimpleCommandElement>]*
  * <SimpleCommandElement> ::= <Identifier> | <Redirection>
  * <Redirection> ::= '>' <Identifier>
  *                 | '<' <Identifier>
@@ -80,6 +80,106 @@ struct command {
     int                   num_shell_commands;        /* シェルコマンドの個数 */
     int                   capacity_shell_commands;   /* シェルコマンドの配列の最大要素数 */
 };
+
+/*
+ * simple_command構造体の操作関数
+ */
+
+/*
+ * simple_command構造体の初期化
+ */
+bool initialize_simple_command(struct simple_command* simple_cmd);
+
+/*
+ * simple_command構造体の破棄
+ */
+void free_simple_command(struct simple_command* simple_cmd);
+
+/*
+ * コマンドに渡す引数の追加
+ * 成功した場合はtrue, 失敗した場合はfalseを返す
+ */
+bool append_argument(struct simple_command* simple_cmd, const char* arg);
+
+/*
+ * shell_command構造体の操作関数
+ */
+
+/*
+ * shell_command構造体の初期化
+ */
+bool initialize_shell_command(struct shell_command* shell_cmd);
+
+/*
+ * shell_command構造体の破棄
+ */
+void free_shell_command(struct shell_command* shell_cmd);
+
+/*
+ * コマンドを追加
+ * 成功した場合はtrue, 失敗した場合はfalseを返す
+ */
+bool append_simple_command(
+    struct shell_command* shell_cmd, struct simple_command* simple_cmd);
+
+/*
+ * command構造体の操作関数
+ */
+
+/*
+ * command構造体の初期化
+ */
+bool initialize_command(struct command* cmd);
+
+/*
+ * command構造体の破棄
+ */
+void free_command(struct command* cmd);
+
+/*
+ * 1行のシェルコマンドを追加
+ * 成功した場合はtrue, 失敗した場合はfalseを返す
+ */
+bool append_shell_command(
+    struct command* cmd, struct shell_command* shell_cmd);
+
+/*
+ * 構文解析の実装
+ */
+
+/*
+ * コマンドの構文解析
+ * <Command> ::= <ShellCommand> [<ShellCommandOp> <ShellCommand>]* <ShellCommandOp>?
+ * <ShellCommandOp> ::= '&&' | '||' | '&' | ';'
+ */
+bool parse_command(struct token_stream* tok_stream, struct command* cmd);
+
+/*
+ * シェルコマンドの構文解析
+ * <ShellCommand> ::= <SimpleCommandList>
+ * <SimpleCommandList> ::= <SimpleCommand> ['|' <SimpleCommand>]*
+ */
+bool parse_shell_command(
+    struct token_stream* tok_stream, struct shell_command* shell_cmd);
+
+/*
+ * 各コマンドの構文解析
+ * <SimpleCommand> ::= <Identifier> [<SimpleCommandElement>]*
+ * <SimpleCommandElement> ::= <Identifier> | <Redirection>
+ */
+bool parse_simple_command(
+    struct token_stream* tok_stream,
+    struct simple_command* simple_cmd,
+    struct redirect_info* redir_info);
+
+/*
+ * リダイレクトの構文解析
+ * <Redirection> ::= '>' <Identifier>
+ *                 | '<' <Identifier>
+ *                 | '>>' <Identifier>
+ */
+bool parse_redirect(
+    struct token_stream* tok_stream, struct redirect_info* redir_info);
 
 #endif /* PARSER_H */
 

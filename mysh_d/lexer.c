@@ -4,6 +4,7 @@
 
 #include <assert.h>
 #include <ctype.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -190,8 +191,17 @@ bool token_stream_has_more_tokens(
     struct token_stream* tok_stream)
 {
     assert(tok_stream != NULL);
-
     return (tok_stream->current_index < tok_stream->num_tokens - 1);
+}
+
+/*
+ * トークンストリームのトークンを最後まで読み取ったかどうかを判定
+ */
+bool token_stream_end_of_stream(
+    struct token_stream* tok_stream)
+{
+    assert(tok_stream != NULL);
+    return (tok_stream->current_index >= tok_stream->num_tokens);
 }
 
 /*
@@ -201,11 +211,21 @@ struct token* token_stream_get_current_token(
     struct token_stream* tok_stream)
 {
     assert(tok_stream != NULL);
-
     return (tok_stream->num_tokens == 0 ? NULL :
             tok_stream->current_index >= tok_stream->num_tokens ? NULL :
             /* tok_stream->current_index < 0 ? NULL : */
             &tok_stream->tokens[tok_stream->current_index]);
+}
+
+/*
+ * トークンストリームのインデックスを指定
+ */
+bool token_stream_set_current_index(
+    struct token_stream* tok_stream, size_t index)
+{
+    assert(tok_stream != NULL);
+    tok_stream->current_index = index;
+    return true;
 }
 
 /*
@@ -296,8 +316,8 @@ bool get_token_stream(char* input, struct token_stream* tok_stream)
     struct token new_token;
 
     char ch;
-    char prev_ch;
     char next_ch;
+    /* char prev_ch; */
     
     assert(input != NULL);
     input_length = strlen(input);
@@ -311,7 +331,7 @@ bool get_token_stream(char* input, struct token_stream* tok_stream)
     /* 文字列の解析 */
     for (i = 0; i < input_length; ++i) {
         ch = input[i];
-        prev_ch = (i > 1) ? input[i - 1] : '\0';
+        /* prev_ch = (i > 1) ? input[i - 1] : '\0'; */
         next_ch = (i < input_length - 1) ? input[i + 1] : '\0';
 
 reprocess:
@@ -468,6 +488,8 @@ reprocess:
             if (!token_stream_append_token(tok_stream, &new_token))
                 goto fail;
 
+            break;
+        default:
             break;
     }
     

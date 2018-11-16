@@ -8,12 +8,14 @@
 
 #include "input.h"
 #include "lexer.h"
+#include "parser.h"
 #include "util.h"
 
 int main(int argc, char** argv)
 {
     char* input;
     struct token_stream tok_stream;
+    struct command cmd;
 
     while (true) {
         fputs("> ", stderr);
@@ -31,6 +33,12 @@ int main(int argc, char** argv)
 
         fprintf(stderr, "input command: %s\n", input);
         dump_token_stream(stderr, &tok_stream);
+        
+        /* コマンドの構文解析 */
+        if (!parse_command(&tok_stream, &cmd))
+            break;
+
+        fprintf(stderr, "succeeded\n");
 
         free_token_stream(&tok_stream);
         free(input);
