@@ -1,0 +1,6 @@
+
+# .gitignore
+*.d
+*.o
+*.swp
+
