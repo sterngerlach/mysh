@@ -25,6 +25,9 @@ const char* token_type_to_string(enum token_type type)
         "And", "AndAnd", "Or", "Argument", "Eol"
     };
 
+    assert((int)type >= 0);
+    assert((int)type < sizeof(token_type_str) / sizeof(token_type_str[0]));
+
     return token_type_str[(int)type];
 }
 

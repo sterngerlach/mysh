@@ -25,21 +25,21 @@
 /*
  * 各コマンドの実行方法を指定するための列挙体
  */
-enum execution_flags {
+enum execution_mode {
     /* 指定なし */
-    EXECUTION_FLAGS_NONE        = 0x0000,
+    EXECUTION_MODE_NONE,
 
     /* 現在のコマンドの正常終了時に次のコマンドを実行(&&) */
-    EXECUTE_NEXT_WHEN_SUCCEEDED = 0x0001,
+    EXECUTE_NEXT_WHEN_SUCCEEDED,
 
     /* 現在のコマンドの異常終了時に次のコマンドを実行(||) */
-    EXECUTE_NEXT_WHEN_FAILED    = 0x0002, 
+    EXECUTE_NEXT_WHEN_FAILED, 
 
     /* コマンドを前から順番に実行(;) */
-    EXECUTE_SEQUENTIALLY        = 0x0004,
+    EXECUTE_SEQUENTIALLY,
 
     /* コマンドをバックグラウンドで実行(&) */
-    EXECUTE_IN_BACKGROUND       = 0x0008,
+    EXECUTE_IN_BACKGROUND,
 };
 
 /*
@@ -68,7 +68,7 @@ struct shell_command {
     int                    num_simple_commands;      /* コマンドの個数 */
     int                    capacity_simple_commands; /* コマンドの配列の最大要素数 */
     struct redirect_info   redir_info;               /* リダイレクトに関する情報 */
-    enum execution_flags   exec_flags;               /* 実行方法 */
+    enum execution_mode    exec_mode;                /* 実行方法 */
     /* int                    job_no; */
 };
 
@@ -80,6 +80,11 @@ struct command {
     int                   num_shell_commands;        /* シェルコマンドの個数 */
     int                   capacity_shell_commands;   /* シェルコマンドの配列の最大要素数 */
 };
+
+/*
+ * コマンドの実行方法を表す列挙体を文字列に変換
+ */
+const char* execution_mode_to_string(enum execution_mode exec_mode);
 
 /*
  * simple_command構造体の操作関数
@@ -100,6 +105,11 @@ void free_simple_command(struct simple_command* simple_cmd);
  * 成功した場合はtrue, 失敗した場合はfalseを返す
  */
 bool append_argument(struct simple_command* simple_cmd, const char* arg);
+
+/*
+ * simple_command構造体の内容を出力
+ */
+void dump_simple_command(FILE* fp, const struct simple_command* simple_cmd);
 
 /*
  * shell_command構造体の操作関数
@@ -123,6 +133,11 @@ bool append_simple_command(
     struct shell_command* shell_cmd, struct simple_command* simple_cmd);
 
 /*
+ * shell_command構造体の内容を出力
+ */
+void dump_shell_command(FILE* fp, struct shell_command* shell_cmd);
+
+/*
  * command構造体の操作関数
  */
 
@@ -142,6 +157,11 @@ void free_command(struct command* cmd);
  */
 bool append_shell_command(
     struct command* cmd, struct shell_command* shell_cmd);
+
+/*
+ * command構造体の内容を出力
+ */
+void dump_command(FILE* fp, struct command* cmd);
 
 /*
  * 構文解析の実装
@@ -168,8 +188,7 @@ bool parse_shell_command(
  * <SimpleCommandElement> ::= <Identifier> | <Redirection>
  */
 bool parse_simple_command(
-    struct token_stream* tok_stream,
-    struct simple_command* simple_cmd,
+    struct token_stream* tok_stream, struct simple_command* simple_cmd,
     struct redirect_info* redir_info);
 
 /*

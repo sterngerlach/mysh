@@ -35,11 +35,16 @@ int main(int argc, char** argv)
         dump_token_stream(stderr, &tok_stream);
         
         /* コマンドの構文解析 */
-        if (!parse_command(&tok_stream, &cmd))
-            break;
+        if (!parse_command(&tok_stream, &cmd)) {
+            free_command(&cmd);
+            free_token_stream(&tok_stream);
+            free(input);
+            continue;
+        }
+        
+        dump_command(stderr, &cmd);
 
-        fprintf(stderr, "succeeded\n");
-
+        free_command(&cmd);
         free_token_stream(&tok_stream);
         free(input);
     }

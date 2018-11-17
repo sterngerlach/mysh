@@ -16,6 +16,22 @@
 #define INCREMENT_ARRAY_CAPACITY    2
 
 /*
+ * コマンドの実行方法を表す列挙体を文字列に変換
+ */
+const char* execution_mode_to_string(enum execution_mode exec_mode)
+{
+    static const char* const execution_mode_str[] = {
+        "EXECUTION_MODE_NONE", "EXECUTE_NEXT_WHEN_SUCCEEDED",
+        "EXECUTE_NEXT_WHEN_FAILED", "EXECUTE_SEQUENTIALLY",
+        "EXECUTE_IN_BACKGROUND" };
+
+    assert((int)exec_mode >= 0);
+    assert((int)exec_mode < sizeof(execution_mode_str) / sizeof(execution_mode_str[0]));
+
+    return execution_mode_str[(int)exec_mode];
+}
+
+/*
  * simple_command構造体の操作関数
  */
 
@@ -113,6 +129,21 @@ bool append_argument(struct simple_command* simple_cmd, const char* arg)
 }
 
 /*
+ * simple_command構造体の内容を出力
+ */
+void dump_simple_command(FILE* fp, const struct simple_command* simple_cmd)
+{
+    int i;
+    
+    fprintf(fp, "simple_command: num_arguments: %d\n",
+            simple_cmd->num_arguments);
+
+    for (i = 0; i < simple_cmd->num_arguments; ++i)
+        fprintf(fp, "simple_command: argument %d: \'%s\'\n",
+                i, simple_cmd->arguments[i]);
+}
+
+/*
  * shell_command構造体の操作関数
  */
 
@@ -126,7 +157,7 @@ bool initialize_shell_command(struct shell_command* shell_cmd)
     shell_cmd->simple_commands = NULL;
     shell_cmd->num_simple_commands = 0;
     shell_cmd->capacity_simple_commands = 0;
-    shell_cmd->exec_flags = EXECUTION_FLAGS_NONE;
+    shell_cmd->exec_mode = EXECUTION_MODE_NONE;
     /* shell_cmd->job_no = -1; */
     
     /* リダイレクトに関する情報の初期化 */
@@ -165,7 +196,7 @@ void free_shell_command(struct shell_command* shell_cmd)
 
     shell_cmd->redir_info.append_output = false;
 
-    shell_cmd->exec_flags = EXECUTION_FLAGS_NONE;
+    shell_cmd->exec_mode = EXECUTION_MODE_NONE;
     /* shell_cmd->job_no = -1; */
 }
 
@@ -218,6 +249,30 @@ bool append_simple_command(
     shell_cmd->num_simple_commands++;
 
     return true;
+}
+
+/*
+ * shell_command構造体の内容を出力
+ */
+void dump_shell_command(FILE* fp, struct shell_command* shell_cmd)
+{
+    int i;
+
+    fprintf(fp, "shell_command: num_simple_commands: %d\n",
+            shell_cmd->num_simple_commands);
+    fprintf(fp, "shell_command: redir_info: input_file_name: %s\n",
+            shell_cmd->redir_info.input_file_name != NULL ?
+            shell_cmd->redir_info.input_file_name : "stdin");
+    fprintf(fp, "shell_command: redir_info: output_file_name: %s\n",
+            shell_cmd->redir_info.output_file_name != NULL ?
+            shell_cmd->redir_info.output_file_name : "stdout");
+    fprintf(fp, "shell_command: redir_info: append_output: %d\n",
+            shell_cmd->redir_info.append_output);
+    fprintf(fp, "shell_command: exec_mode: %s\n",
+            execution_mode_to_string(shell_cmd->exec_mode));
+
+    for (i = 0; i < shell_cmd->num_simple_commands; ++i)
+        dump_simple_command(fp, &shell_cmd->simple_commands[i]);
 }
 
 /*
@@ -306,6 +361,20 @@ bool append_shell_command(
 }
 
 /*
+ * command構造体の内容を出力
+ */
+void dump_command(FILE* fp, struct command* cmd)
+{
+    int i;
+
+    fprintf(fp, "command: num_shell_commands: %d\n",
+            cmd->num_shell_commands);
+
+    for (i = 0; i < cmd->num_shell_commands; ++i)
+        dump_shell_command(fp, &cmd->shell_commands[i]);
+}
+
+/*
  * 構文解析の実装
  */
 
@@ -322,7 +391,7 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
     assert(tok_stream != NULL);
     assert(cmd != NULL);
     
-    print_message(__func__, "called\n");
+    /* print_message(__func__, "called\n"); */
 
     /* コマンドを初期化 */
     if (!initialize_command(cmd)) {
@@ -346,7 +415,7 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
         /* トークンがなければ終了 */
         if (token_stream_end_of_stream(tok_stream)) {
             /* シェルコマンドの実行方法を指定 */
-            shell_cmd.exec_flags = EXECUTION_FLAGS_NONE;
+            shell_cmd.exec_mode = EXECUTION_MODE_NONE;
 
             /* シェルコマンドを追加 */
             if (!append_shell_command(cmd, &shell_cmd)) {
@@ -383,19 +452,19 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
         switch (tok_op->type) {
             case TOKEN_TYPE_AND_AND:
                 /* コマンドの正常終了時に次のコマンドを実行 */
-                shell_cmd.exec_flags = EXECUTE_NEXT_WHEN_SUCCEEDED;
+                shell_cmd.exec_mode = EXECUTE_NEXT_WHEN_SUCCEEDED;
                 break;
             case TOKEN_TYPE_OR:
                 /* コマンドの異常終了時に次のコマンドを実行 */
-                shell_cmd.exec_flags = EXECUTE_NEXT_WHEN_FAILED;
+                shell_cmd.exec_mode = EXECUTE_NEXT_WHEN_FAILED;
                 break;
             case TOKEN_TYPE_AND:
                 /* コマンドをバックグラウンドで実行 */
-                shell_cmd.exec_flags = EXECUTE_IN_BACKGROUND;
+                shell_cmd.exec_mode = EXECUTE_IN_BACKGROUND;
                 break;
             case TOKEN_TYPE_SEMICOLON:
                 /* コマンドを前から順番に実行 */
-                shell_cmd.exec_flags = EXECUTE_SEQUENTIALLY;
+                shell_cmd.exec_mode = EXECUTE_SEQUENTIALLY;
                 break;
             default:
                 assert(false);
@@ -417,6 +486,12 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
                 return true;
 
             print_error(__func__, "no more tokens, command expected\n");
+            return false;
+        }
+
+        /* シェルコマンドを再度初期化 */
+        if (!initialize_shell_command(&shell_cmd)) {
+            print_error(__func__, "initialize_shell_command() failed\n");
             return false;
         }
 
@@ -444,7 +519,7 @@ bool parse_shell_command(
     assert(tok_stream != NULL);
     assert(shell_cmd != NULL);
 
-    print_message(__func__, "called\n");
+    /* print_message(__func__, "called\n"); */
 
     /* コマンドを初期化 */
     if (!initialize_simple_command(&simple_cmd)) {
@@ -487,6 +562,12 @@ bool parse_shell_command(
             return false;
         }
 
+        /* コマンドを再度初期化 */
+        if (!initialize_simple_command(&simple_cmd)) {
+            print_error(__func__, "initialize_simple_command() failed\n");
+            return false;
+        }
+
         /* コマンドを解析 */
         if (!parse_simple_command(tok_stream, &simple_cmd, &shell_cmd->redir_info)) {
             print_error(__func__, "parse_simple_command() failed\n");
@@ -509,8 +590,7 @@ bool parse_shell_command(
  * <SimpleCommandElement> ::= <Identifier> | <Redirection>
  */
 bool parse_simple_command(
-    struct token_stream* tok_stream,
-    struct simple_command* simple_cmd,
+    struct token_stream* tok_stream, struct simple_command* simple_cmd,
     struct redirect_info* redir_info)
 {
     struct token* tok;
@@ -518,7 +598,7 @@ bool parse_simple_command(
     assert(tok_stream != NULL);
     assert(simple_cmd != NULL);
 
-    print_message(__func__, "called\n");
+    /* print_message(__func__, "called\n"); */
 
     /* トークンストリームからトークンを取得 */
     /* トークンがなければエラー */
@@ -555,8 +635,13 @@ bool parse_simple_command(
             /* トークンが識別子またはリダイレクト記号でなければ返す */
             /* parse_redirect関数はトークンストリームのインデックスを,
              * 次に読むべきトークンの位置まで進めてくれる */
-            if (!parse_redirect(tok_stream, redir_info))
+            if (tok->type != TOKEN_TYPE_GREAT &&
+                tok->type != TOKEN_TYPE_LESS && 
+                tok->type != TOKEN_TYPE_GREAT_GREAT)
                 return true;
+
+            if (!parse_redirect(tok_stream, redir_info))
+                return false;
 
             /* トークンが残っていなければ返す */
             if (token_stream_end_of_stream(tok_stream))
@@ -593,12 +678,12 @@ bool parse_redirect(
     assert(tok_stream != NULL);
     assert(redir_info != NULL);
 
-    print_message(__func__, "called\n");
+    /* print_message(__func__, "called\n"); */
 
     /* トークンストリームからトークンを取得 */
     /* トークンがなければエラー */
     if ((tok_redir_op = token_stream_get_current_token(tok_stream)) == NULL) {
-        /* print_error(__func__, "no more tokens, redirect operator expected\n"); */
+        print_error(__func__, "no more tokens, redirect operator expected\n");
         return false;
     }
 
