@@ -22,11 +22,11 @@ $(TARGET): $(OBJECTS)
 %.o: %.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-.PHONY: clean
-.PHONY: debug
-
 clean:
 	rm -f $(OBJECTS) $(DEPENDS)
+
+.PHONY: clean
+.PHONY: debug
 
 -include $(DEPENDS)
 

@@ -5,6 +5,11 @@
 #ifndef PARSER_H
 #define PARSER_H
 
+#include <stdbool.h>
+#include <stdio.h>
+
+#include "lexer.h"
+
 /*
  * コマンドの文法
  * 以下の各文法要素を解析する関数が実装されている
