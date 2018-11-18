@@ -10,5 +10,10 @@
  */
 char* get_line();
 
+/*
+ * プロンプトを表示
+ */
+void prompt();
+
 #endif /* INPUT_H */
 

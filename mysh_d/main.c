@@ -2,7 +2,6 @@
 /* 情報工学科3年 学籍番号61610117 杉浦 圭祐 */
 /* main.c */
 
-#include <getopt.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -13,39 +12,6 @@
 #include "parser.h"
 #include "shell.h"
 #include "util.h"
-
-bool is_debug_mode = false;
-
-/*
- * コマンドライン引数の解析
- */
-void parse_cmdline(int argc, char** argv)
-{
-    /* オプションのフォーマット文字列 */
-    static const char* const option_str = "d";
-
-    /* 有効なオプションの配列 */
-    static const struct option long_options[] = {
-        { "debug",  no_argument,    NULL, 'd' },
-        { NULL,     0,              NULL, 0   }
-    };
-    
-    int opt;
-    int opt_index;
-    
-    /* オプションの取得 */
-    while ((opt = getopt_long(argc, argv, option_str, long_options, &opt_index)) != -1) {
-        switch (opt) {
-            case 'd':
-                /* シェルをデバッグモードで起動 */
-                is_debug_mode = true;
-                break;
-            default:
-                /* それ以外のオプションは無視 */
-                break;
-        }
-    }
-}
 
 int main(int argc, char** argv)
 {
@@ -60,8 +26,11 @@ int main(int argc, char** argv)
     /* シグナルハンドラの設定 */
     set_signal_handlers();
 
+    fprintf(stderr, "welcome to mysh!\n");
+
     while (true) {
-        fputs("> ", stderr);
+        /* プロンプトを表示 */
+        prompt();
 
         /* ユーザ入力の取得 */
         if ((input = get_line()) == NULL)
@@ -71,7 +40,7 @@ int main(int argc, char** argv)
         chomp(input);
 
         /* 入力文字列を表示 */
-        if (is_debug_mode)
+        if (app_config.is_debug_mode)
             print_message(__func__, "input command: %s\n", input);
 
         /* 入力文字列が空である場合 */
@@ -87,7 +56,7 @@ int main(int argc, char** argv)
             free(input);
             continue;
         } else {
-            if (is_debug_mode) {
+            if (app_config.is_debug_mode) {
                 print_message(__func__, "get_token_stream() succeeded\n");
                 dump_token_stream(stderr, &tok_stream);
             }
@@ -101,7 +70,7 @@ int main(int argc, char** argv)
             free(input);
             continue;
         } else {
-            if (is_debug_mode) {
+            if (app_config.is_debug_mode) {
                 print_message(__func__, "parse_command() succeeded\n");
                 dump_command(stderr, &cmd);
             }

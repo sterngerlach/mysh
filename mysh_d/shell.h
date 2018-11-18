@@ -14,6 +14,23 @@
 #define PIPE_READ   0
 
 /*
+ * シェルの設定を保持する構造体
+ */
+struct shell_config {
+    bool is_debug_mode;     /* デバッグモードかどうか */
+};
+
+/*
+ * シェルの設定を保持するグローバル変数
+ */
+extern struct shell_config app_config;
+
+/*
+ * コマンドライン引数の解析
+ */
+void parse_cmdline(int argc, char** argv);
+
+/*
  * シグナルSIGCHLDの処理
  */
 void sigchld_handler(int sig, siginfo_t* info, void* q);
@@ -22,6 +39,11 @@ void sigchld_handler(int sig, siginfo_t* info, void* q);
  * シグナルハンドラの設定
  */
 void set_signal_handlers();
+
+/*
+ * コマンドの絶対パスを取得
+ */
+char* search_path(const char* cmd);
 
 /*
  * コマンドを実行

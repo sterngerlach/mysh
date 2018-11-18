@@ -47,6 +47,11 @@ int is_meta_char(char c);
 void chomp(char* str);
 
 /*
+ * 文字列がある文字列から開始するかどうかを判定
+ */
+bool starts_with(const char* str, const char* pattern);
+
+/*
  * 文字列(10進数の整数表現)を整数に変換
  */
 bool strict_strtol(const char* nptr, long* valptr);

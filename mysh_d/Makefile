@@ -6,12 +6,15 @@ CC = gcc
 CFLAGS = -MMD -MP -Os -Wall -Wextra
 LDFLAGS =
 
-TARGET = mysh
+OBJDIR = ./obj
+OUTDIR = ./bin
+
+TARGET = $(OUTDIR)/mysh
 SOURCES = $(notdir $(wildcard ./*.c))
-OBJECTS = $(notdir $(SOURCES:.c=.o))
+OBJECTS = $(addprefix $(OBJDIR)/, $(notdir $(SOURCES:.c=.o)))
 DEPENDS = $(OBJECTS:.o=.d)
 
-default: $(TARGET) clean
+default: $(TARGET)
 
 debug: CFLAGS += -ggdb
 debug: $(TARGET)
@@ -19,7 +22,7 @@ debug: $(TARGET)
 $(TARGET): $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
-%.o: %.c
+$(OBJDIR)/%.o: %.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 clean:
