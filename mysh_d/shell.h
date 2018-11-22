@@ -46,6 +46,16 @@ void set_signal_handlers();
 char* search_path(const char* cmd);
 
 /*
+ * 指定されたファイル記述子を新たなファイル記述子にコピーして閉じる
+ */
+int dup2_close(int old_fd, int new_fd);
+
+/*
+ * 子プロセスが終了するまで待機
+ */
+int wait_child_process(pid_t cpid, int* status);
+
+/*
  * コマンドを実行
  */
 void execute_command(const struct command* cmd, bool* is_exit);

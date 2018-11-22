@@ -85,7 +85,8 @@ void sigchld_handler(int sig, siginfo_t* info, void* q)
                 break;
             }
         } else {
-            print_message(__func__, "process (pid: %d) exited\n", pid);
+            if (app_config.is_debug_mode)
+                print_message(__func__, "process (pid: %d) exited\n", pid);
         }
     }
 }
@@ -210,6 +211,55 @@ char* search_path(const char* cmd)
 }
 
 /*
+ * 指定されたファイル記述子を新たなファイル記述子にコピーして閉じる
+ */
+int dup2_close(int old_fd, int new_fd)
+{
+    if (old_fd == new_fd)
+        return 0;
+
+    if (dup2(old_fd, new_fd) == -1) {
+        print_error(__func__, "dup2() failed: %s\n", strerror(errno));
+        close(old_fd);
+        return -1;
+    }
+    
+    if (close(old_fd) == -1) {
+        print_error(__func__, "close() failed: %s\n", strerror(errno));
+        return -1;
+    }
+
+    return 0;
+}
+
+/*
+ * 子プロセスが終了するまで待機
+ */
+int wait_child_process(pid_t cpid, int* status)
+{
+    pid_t wpid;
+
+    while ((wpid = waitpid(cpid, status, 0)) != 0) {
+        if (wpid == -1) {
+            if (errno == EINTR) {
+                /* シグナルに割り込まれたのでやり直し */
+                continue;
+            } else if (errno == ECHILD) {
+                /* 指定されたプロセスIDの子プロセスはいない */
+                return 0;
+            } else {
+                print_error(__func__, "waitpid() failed: %s\n", strerror(errno));
+                return -1;
+            }
+        } else {
+            return 0;
+        }
+    }
+
+    return -1;
+}
+
+/*
  * コマンドを実行
  */
 void execute_command(const struct command* cmd, bool* is_exit)
@@ -228,7 +278,6 @@ void execute_command(const struct command* cmd, bool* is_exit)
     int exit_status;
 
     pid_t cpid;
-    pid_t wpid;
     pid_t ppid;
     pid_t pgid_parent;
     pid_t pgid_old;
@@ -297,16 +346,8 @@ void execute_command(const struct command* cmd, bool* is_exit)
             simple_cmd = &shell_cmd->simple_commands[j];
             
             /* 標準入力のファイル記述子の処理 */
-            if (dup2(fd_in, STDIN_FILENO) == -1) {
-                print_error(__func__, "dup2() failed: %s\n", strerror(errno));
-                close(fd_in);
+            if (dup2_close(fd_in, STDIN_FILENO) < 0)
                 goto cleanup;
-            }
-
-            if (close(fd_in) == -1) {
-                print_error(__func__, "close() failed: %s\n", strerror(errno));
-                goto cleanup;
-            }
 
             if (j == shell_cmd->num_simple_commands - 1) {
                 /* 標準出力のリダイレクト処理 */
@@ -345,16 +386,8 @@ void execute_command(const struct command* cmd, bool* is_exit)
             }
 
             /* 標準出力のファイル記述子の処理 */
-            if (dup2(fd_out, STDOUT_FILENO) == -1) {
-                print_error(__func__, "dup2() failed: %s\n", strerror(errno));
-                close(fd_out);
+            if (dup2_close(fd_out, STDOUT_FILENO) < 0)
                 goto cleanup;
-            }
-
-            if (close(fd_out) == -1) {
-                print_error(__func__, "close() failed: %s\n", strerror(errno));
-                goto cleanup;
-            }
 
             /* ビルトインコマンドを探索 */
             if ((builtin_cmd = search_builtin_command(simple_cmd->arguments[0])) != NULL) {
@@ -417,9 +450,6 @@ void execute_command(const struct command* cmd, bool* is_exit)
                     pgid_child = (j == 0) ? cpid : pgid_child;
                 }
 
-                if (app_config.is_debug_mode)
-                    print_message(__func__, "cpid: %d, pgid_child: %d\n", cpid, pgid_child);
-
                 /* 子プロセスのプロセスグループIDを設定 */
                 if (setpgid(cpid, pgid_child) == -1) {
                     print_error(__func__, "setpgid() failed: %s\n", strerror(errno));
@@ -436,22 +466,9 @@ void execute_command(const struct command* cmd, bool* is_exit)
                 }
 
                 /* 子プロセスを待機 */
-                if (shell_cmd->exec_mode != EXECUTE_IN_BACKGROUND) {
-                    while ((wpid = waitpid(cpid, &status, 0)) != 0) {
-                        if (wpid == -1) {
-                            if (errno == EINTR) {
-                                continue;
-                            } else if (errno == ECHILD) {
-                                break;
-                            } else {
-                                print_error(__func__, "waitpid() failed: %s\n", strerror(errno));
-                                goto cleanup;
-                            }
-                        } else {
-                            break;
-                        }
-                    }
-                }
+                if (shell_cmd->exec_mode != EXECUTE_IN_BACKGROUND)
+                    if (wait_child_process(cpid, &status) < 0)
+                        goto cleanup;
             }
         }
 
@@ -480,23 +497,14 @@ cleanup:
         goto cleanup;
     }
 
-    if (fd_actual_stdin != -1) {
-        if (dup2(fd_actual_stdin, STDIN_FILENO) == -1)
-            print_error(__func__, "dup2() failed\n", strerror(errno));
-        if (close(fd_actual_stdin) == -1)
-            print_error(__func__, "close() failed\n", strerror(errno));
-    }
+    if (fd_actual_stdin != -1)
+        dup2_close(fd_actual_stdin, STDIN_FILENO);
 
-    if (fd_actual_stdout != -1) {
-        if (dup2(fd_actual_stdout, STDOUT_FILENO) == -1)
-            print_error(__func__, "dup2() failed\n", strerror(errno));
-        if (close(fd_actual_stdout) == -1)
-            print_error(__func__, "close() failed\n", strerror(errno));
-    }
+    if (fd_actual_stdout != -1)
+        dup2_close(fd_actual_stdout, STDOUT_FILENO);
 
-    if (fd_tty != -1) {
+    if (fd_tty != -1)
         if (close(fd_tty) == -1)
             print_error(__func__, "close() failed\n", strerror(errno));
-    }
 }
 
