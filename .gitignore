@@ -4,3 +4,6 @@
 *.o
 *.swp
 
+mysh_d/bin/
+mysh_d/obj/
+

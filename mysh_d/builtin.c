@@ -3,7 +3,9 @@
 /* builtin.c */
 
 #include <errno.h>
+#include <limits.h>
 #include <pwd.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
@@ -17,6 +19,7 @@
  */
 struct builtin_command_table builtin_commands[] = {
     { "cd",     builtin_cd },
+    { "pwd",    builtin_pwd },
     { "exit",   builtin_exit },
     { NULL,     NULL },
 };
@@ -42,6 +45,8 @@ void builtin_cd(int argc, char** args, bool* is_exit)
 {
     char* env_home;
     struct passwd* pw;
+
+    (void)is_exit;
 
     /* 引数が多すぎる場合はエラー */
     if (argc > 2) {
@@ -75,10 +80,38 @@ void builtin_cd(int argc, char** args, bool* is_exit)
 }
 
 /*
+ * pwdコマンドの処理
+ */
+void builtin_pwd(int argc, char** args, bool* is_exit)
+{
+    char pwd[PATH_MAX + 1];
+
+    (void)args;
+    (void)is_exit;
+
+    /* 引数が多すぎる場合はエラー */
+    if (argc > 1) {
+        print_error(__func__, "pwd command takes no arguments but %d were given\n", argc - 1);
+        return;
+    }
+
+    /* カレントディレクトリを取得 */
+    if (getcwd(pwd, sizeof(pwd)) == NULL) {
+        print_error(__func__, "getcwd() failed: %s\n", strerror(errno));
+        return;
+    }
+
+    fprintf(stderr, "%s\n", pwd);
+}
+
+/*
  * exitコマンドの処理
  */
 void builtin_exit(int argc, char** args, bool* is_exit)
 {
+    (void)argc;
+    (void)args;
+
     *is_exit = true;
 }
 

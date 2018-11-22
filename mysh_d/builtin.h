@@ -36,6 +36,11 @@ builtin_command search_builtin_command(const char* command_name);
 void builtin_cd(int argc, char** args, bool* is_exit);
 
 /*
+ * pwdコマンドの処理
+ */
+void builtin_pwd(int argc, char** args, bool* is_exit);
+
+/*
  * exitコマンドの処理
  */
 void builtin_exit(int argc, char** args, bool* is_exit);
