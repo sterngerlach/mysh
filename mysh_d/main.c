@@ -75,6 +75,20 @@ int main(int argc, char** argv)
                 dump_command(stderr, &cmd);
             }
         }
+
+        /* コマンドを展開 */
+        if (!expand_command(&cmd)) {
+            print_error(__func__, "expand_command() failed\n");
+            free_command(&cmd);
+            free_token_stream(&tok_stream);
+            free(input);
+            continue;
+        } else {
+            if (app_config.is_debug_mode) {
+                print_message(__func__, "expand_command() succeeded\n");
+                dump_command(stderr, &cmd);
+            }
+        }
         
         /* コマンドを実行 */
         execute_command(&cmd, &is_exit);

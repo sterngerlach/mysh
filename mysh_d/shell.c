@@ -2,10 +2,12 @@
 /* 情報工学科3年 学籍番号61610117 杉浦 圭祐 */
 /* shell.c */
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
 #include <limits.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -257,6 +259,365 @@ int wait_child_process(pid_t cpid, int* status)
     }
 
     return -1;
+}
+
+/*
+ * コマンドを展開
+ */
+bool expand_command(struct command* cmd)
+{
+    int i;
+    int j;
+    int k;
+
+    char* expansion_result;
+
+    struct shell_command* shell_cmd;
+    struct redirect_info* redir_info;
+    struct simple_command* simple_cmd;
+    
+    for (i = 0; i < cmd->num_shell_commands; ++i) {
+        shell_cmd = &cmd->shell_commands[i];
+        redir_info = &shell_cmd->redir_info;
+
+        /* 入力元のファイル名の展開 */
+        if (redir_info->input_file_name != NULL) {
+            /* チルダで開始する文字列を展開 */
+            if (!expand_tilde(redir_info->input_file_name, &expansion_result)) {
+                print_error(__func__, "expand_tilde() failed\n");
+                return false;
+            }
+            
+            /* 文字列が置き換わった場合は, 置き換える前の文字列を破棄 */
+            /* redir_info->input_file_nameにはstrdup()関数の戻り値が格納されているため,
+             * free()関数によって解放することができる */
+            if (expansion_result != NULL) {
+                free(redir_info->input_file_name);
+                redir_info->input_file_name = expansion_result;
+            }
+
+            /* 環境変数を展開 */
+            if (!expand_variable(redir_info->input_file_name, &expansion_result)) {
+                print_error(__func__, "expand_variable() failed\n");
+                return false;
+            }
+            
+            free(redir_info->input_file_name);
+            redir_info->input_file_name = expansion_result;
+        }
+
+        /* 出力先のファイル名の展開 */
+        if (redir_info->output_file_name != NULL) {
+            /* チルダで開始する文字列を展開 */
+            if (!expand_tilde(redir_info->output_file_name, &expansion_result)) {
+                print_error(__func__, "expand_tilde() failed\n");
+                return false;
+            }
+            
+            /* redir_info->output_file_nameにはstrdup()関数の戻り値が格納されているため,
+             * free()関数によって解放することができる */
+            if (expansion_result != NULL) {
+                free(redir_info->output_file_name);
+                redir_info->output_file_name = expansion_result;
+            }
+
+            /* 環境変数を展開 */
+            if (!expand_variable(redir_info->output_file_name, &expansion_result)) {
+                print_error(__func__, "expand_variable() failed\n");
+                return false;
+            }
+            
+            free(redir_info->output_file_name);
+            redir_info->output_file_name = expansion_result;
+        }
+
+        for (j = 0; j < shell_cmd->num_simple_commands; ++j) {
+            simple_cmd = &shell_cmd->simple_commands[j];
+
+            for (k = 0; k < simple_cmd->num_arguments; ++k) {
+                /* コマンドライン引数の展開 */
+                /* チルダで開始する文字列を展開 */
+                if (!expand_tilde(simple_cmd->arguments[k], &expansion_result)) {
+                    print_error(__func__, "expand_tilde() failed\n");
+                    return false;
+                }
+
+                /* 文字列が置き換わった場合は, 置き換える前の文字列を破棄 */
+                /* simple_cmd->argumentsにはstrndup()関数の戻り値が格納されているため,
+                 * free()関数によって解放することができる */
+                if (expansion_result != NULL) {
+                    free(simple_cmd->arguments[k]);
+                    simple_cmd->arguments[k] = expansion_result;
+                }
+                
+                /* 環境変数を展開 */
+                if (!expand_variable(simple_cmd->arguments[k], &expansion_result)) {
+                    print_error(__func__, "expand_variable() failed\n");
+                    return false;
+                }
+
+                free(simple_cmd->arguments[k]);
+                simple_cmd->arguments[k] = expansion_result;
+            }
+        }
+    }
+
+    return true;
+}
+
+/*
+ * チルダで開始する文字列を展開
+ */
+bool expand_tilde(const char* str, char** result)
+{
+    char* p = NULL;
+    char* home_dir = NULL;
+    char* username = NULL;
+    char* pwd = NULL;
+    size_t len;
+    size_t username_len;
+    struct passwd* pw;
+    
+    /* 展開後の文字列へのポインタ */
+    *result = NULL;
+    
+    /* 文字列が空である場合は何もしない */
+    /* 文字列の先頭がチルダでない場合は何もしない */
+    if (str[0] == '\0' || str[0] != '~')
+        return true;
+
+    /* スラッシュの直前までの部分文字列(ユーザ名)の長さを切り出す */
+    /* ユーザ名の長さが0である(チルダのみである)場合は環境変数HOMEの値で書き換え */
+    username_len = ((p = strchr(str, '/')) != NULL) ? (p - str - 1) : (strlen(str) - 1);
+
+    /* 環境変数HOMEの値で置き換える場合 */
+    if (username_len == 0) {
+        /* 環境変数HOMEの値を取得 */
+        if ((home_dir = getenv("HOME")) == NULL) {
+            print_error(__func__, "getenv() failed: %s\n", strerror(errno));
+            return false;
+        }
+        
+        /* 必要な文字数分だけ新たにメモリを確保 */
+        /* チルダを除いた元の文字列, ホームディレクトリ, 末端のヌル文字の合計の長さ */
+        len = strlen(str + 1) + strlen(home_dir) + 1;
+
+        if ((*result = (char*)calloc(len, sizeof(char))) == NULL) {
+            print_error(__func__, "calloc() failed: %s\n", strerror(errno));
+            return false;
+        }
+        
+        /* ホームディレクトリとチルダを除いた元の文字列を順にコピー */
+        strcpy(*result, home_dir);
+        strcat(*result, str + 1);
+        (*result)[len - 1] = '\0';
+        
+        return true;
+    }
+    
+    /* カレントディレクトリで置き換える場合 */
+    if (!strncmp(str + 1, "+", username_len)) {
+        /* 環境変数PWDの値を取得 */
+        if ((pwd = getenv("PWD")) == NULL) {
+            print_error(__func__, "getenv() failed: %s\n", strerror(errno));
+            return false;
+        }
+
+        /* 必要な文字数分だけ新たにメモリを確保 */
+        /* チルダとプラス記号を除いた元の文字列, カレントディレクトリ, 末端のヌル文字の合計の長さ */
+        len = strlen(str + 2) + strlen(pwd) + 1;
+
+        if ((*result = (char*)calloc(len, sizeof(char))) == NULL) {
+            print_error(__func__, "calloc() failed: %s\n", strerror(errno));
+            return false;
+        }
+
+        /* カレントディレクトリとチルダ及びプラス記号を除いた元の文字列を順にコピー */
+        strcpy(*result, pwd);
+        strcat(*result, str + 2);
+        (*result)[len - 1] = '\0';
+
+        return true;
+    }
+
+    /* 特定のユーザのホームディレクトリで置き換える場合 */
+    if ((username = strndup(str + 1, username_len)) == NULL) {
+        print_error(__func__, "strndup() failed: %s\n", strerror(errno));
+        return false;
+    }
+
+    /* 指定されたユーザが見つからない場合はそのまま返す */
+    if ((pw = getpwnam(username)) == NULL) {
+        free(username);
+        return true;
+    }
+    
+    /* ユーザのホームディレクトリで置き換え */
+    /* 必要な文字数分だけ新たにメモリを確保 */
+    /* チルダとユーザ名を除いた元の文字列, ユーザのホームディレクトリ, 末端のヌル文字の合計の長さ */
+    len = strlen(str + username_len + 1) + strlen(pw->pw_dir) + 1;
+
+    if ((*result = (char*)calloc(len, sizeof(char))) == NULL) {
+        print_error(__func__, "calloc() failed: %s\n", strerror(errno));
+        free(username);
+        return false;
+    }
+
+    /* 文字列を順にコピー */
+    strcpy(*result, pw->pw_dir);
+    strcat(*result, str + username_len + 1);
+    (*result)[len - 1] = '\0';
+
+    return true;
+}
+
+/*
+ * 環境変数を展開
+ */
+bool expand_variable(const char* str, char** result)
+{
+    int i;
+    int j;
+    int begin;
+    int len;
+    int capacity;
+    int env_name_len;
+
+    char* env_name = NULL;
+    char* env_val = NULL;
+    char* new_result = NULL;
+    char ch;
+    char next_ch;
+
+    bool ret = true;
+    bool is_env = false;
+
+    /* 展開後の文字列へのポインタ */
+    *result = NULL;
+
+    /* 文字列が空である場合は何もしない */
+    if (str[0] == '\0')
+        return true;
+
+    /* 展開後の文字列のために適当な大きさのバッファを確保 */
+    /* バッファの大きさの初期値は入力文字列の長さとする */
+    len = strlen(str);
+    capacity = len;
+    
+    if ((*result = (char*)calloc(capacity + 1, sizeof(char))) == NULL) {
+        print_error(__func__, "calloc() failed: %s\n", strerror(errno));
+        return false;
+    }
+    
+    /* 文字列の解析 */
+    for (i = 0, j = 0; i < len; ++i) {
+        ch = str[i];
+        next_ch = (i < len - 1) ? str[i + 1] : '\0';
+        
+        if (!is_env) {
+            /* 環境変数ではない場合 */
+            if (ch == '$' && (isalpha(next_ch) || next_ch == '_')) {
+                /* 環境変数の開始 */
+                /* 環境変数の変数名には, アルファベットまたはアンダースコアで開始し,
+                 * 後ろにアルファベット, 数値, アンダースコアのいずれかが0文字以上続くものを想定 */
+                is_env = true;
+                begin = i + 1;
+            } else {
+                /* それ以外の文字の場合は単にバッファに追加 */
+                /* バッファが溢れそうな場合は予め拡張 */
+                if (j + 1 >= capacity) {
+                    capacity += len;
+
+                    if ((new_result = (char*)realloc(*result, capacity + 1)) == NULL) {
+                        print_error(__func__, "realloc() failed: %s\n", strerror(errno));
+                        ret = false;
+                        goto cleanup;
+                    }
+
+                    *result = new_result;
+                }
+                
+                /* バッファに現在の文字を追加 */
+                (*result)[j++] = ch;
+                (*result)[j] = '\0';
+            }
+        } else {
+            /* 環境変数の終了を判定 */
+            if (i == len - 1) {
+                env_name_len = i - begin + 1;
+            } else if (!(isalnum(ch) || ch == '_')) {
+                env_name_len = i - begin;
+                is_env = false;
+                /* 同じ文字(環境変数名として不正な文字)を再度処理 */
+                i--;
+            } else {
+                continue;
+            }
+            
+            /* 環境変数の名前を切り出し */
+            if ((env_name = strndup(str + begin, env_name_len)) == NULL) {
+                print_error(__func__, "strndup() failed: %s\n", strerror(errno));
+                ret = false;
+                goto cleanup;
+            }
+
+            /* 環境変数の値を取得 */
+            if ((env_val = getenv(env_name)) == NULL) {
+                /* 指定された名前の環境変数は存在しないので単にバッファに追加 */
+                /* バッファが溢れそうな場合は領域を拡張 */
+                if (j + env_name_len + 1 >= capacity) {
+                    capacity += len;
+
+                    if ((new_result = (char*)realloc(*result, capacity + 1)) == NULL) {
+                        print_error(__func__, "realloc() failed: %s\n", strerror(errno));
+                        ret = false;
+                        goto cleanup;
+                    }
+
+                    *result = new_result;
+                }
+                
+                /* バッファにドルマークで開始するが環境変数ではない文字列を追加 */
+                strcat(*result, "$");
+                strcat(*result, env_name);
+                j += env_name_len + 1;
+            } else {
+                /* 指定された名前の環境変数が見つかったのでバッファに追加 */
+                /* バッファが溢れそうな場合は領域を拡張 */
+                if (j + strlen(env_val) >= capacity) {
+                    capacity += len;
+
+                    if ((new_result = (char*)realloc(*result, capacity + 1)) == NULL) {
+                        print_error(__func__, "realloc() failed: %s\n", strerror(errno));
+                        ret = false;
+                        goto cleanup;
+                    }
+
+                    *result = new_result;
+                }
+                
+                /* バッファに環境変数の文字列を追加 */
+                strcat(*result, env_val);
+                j += strlen(env_val);
+            }
+        }
+    }
+    
+    /* 末尾がヌル文字で終端することを保証 */
+    (*result)[j] = '\0';
+
+cleanup:
+    if (!ret && *result != NULL) {
+        free(*result);
+        *result = NULL;
+    }
+
+    if (env_name != NULL) {
+        free(env_name);
+        env_name = NULL;
+    }
+    
+    return ret;
 }
 
 /*

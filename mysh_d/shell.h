@@ -56,6 +56,21 @@ int dup2_close(int old_fd, int new_fd);
 int wait_child_process(pid_t cpid, int* status);
 
 /*
+ * コマンドを展開
+ */
+bool expand_command(struct command* cmd);
+
+/*
+ * チルダで開始する文字列を展開
+ */
+bool expand_tilde(const char* str, char** result);
+
+/*
+ * 環境変数を展開
+ */
+bool expand_variable(const char* str, char** result);
+
+/*
  * コマンドを実行
  */
 void execute_command(const struct command* cmd, bool* is_exit);
