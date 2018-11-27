@@ -566,7 +566,7 @@ bool expand_variable(const char* str, char** result)
                 /* 指定された名前の環境変数は存在しないので単にバッファに追加 */
                 /* バッファが溢れそうな場合は領域を拡張 */
                 if (j + env_name_len + 1 >= capacity) {
-                    capacity += len;
+                    capacity += env_name_len + 1;
 
                     if ((new_result = (char*)realloc(*result, capacity + 1)) == NULL) {
                         print_error(__func__, "realloc() failed: %s\n", strerror(errno));
@@ -585,7 +585,7 @@ bool expand_variable(const char* str, char** result)
                 /* 指定された名前の環境変数が見つかったのでバッファに追加 */
                 /* バッファが溢れそうな場合は領域を拡張 */
                 if (j + strlen(env_val) >= capacity) {
-                    capacity += len;
+                    capacity += strlen(env_val);
 
                     if ((new_result = (char*)realloc(*result, capacity + 1)) == NULL) {
                         print_error(__func__, "realloc() failed: %s\n", strerror(errno));
