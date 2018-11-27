@@ -381,6 +381,12 @@ reprocess:
                         goto fail;
                     if (!token_stream_append_token(tok_stream, &new_token))
                         goto fail;
+                } else if (ch == ';') {
+                    /* セミコロン */
+                    if (!create_token(input, i, 1, TOKEN_TYPE_SEMICOLON, &new_token))
+                        goto fail;
+                    if (!token_stream_append_token(tok_stream, &new_token))
+                        goto fail;
                 } else if (!is_meta_char(input[i])) {
                     /* メタ文字で開始しない場合は通常のトークン */
                     current_state = LEXER_STATE_TOKEN;
