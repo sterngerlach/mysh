@@ -25,10 +25,9 @@ const char* token_type_to_string(enum token_type type)
         "And", "AndAnd", "Or", "Argument", "Eol"
     };
 
-    assert((int)type >= 0);
-    assert((int)type < sizeof(token_type_str) / sizeof(token_type_str[0]));
+    assert((size_t)type < sizeof(token_type_str) / sizeof(token_type_str[0]));
 
-    return token_type_str[(int)type];
+    return token_type_str[(size_t)type];
 }
 
 /*
@@ -50,14 +49,7 @@ bool create_token(
     assert(index < strlen(input));
     assert(index + len <= strlen(input));
     assert(type != TOKEN_TYPE_UNKNOWN);
-    
-    /* トークンの文字列の長さが0である(特別なトークン)場合 */
-    if (len == 0) {
-        new_token->type = type;
-        new_token->str = NULL;
-        return true;
-    }
-    
+   
     /* トークンの文字列を複製 */
     if ((token_str = strndup(input + index, len)) == NULL) {
         print_error(__func__, "strndup() failed: %s\n", strerror(errno));
@@ -80,20 +72,6 @@ void free_token(struct token* tok)
         free(tok->str);
         tok->str = NULL;
     }
-}
-
-/*
- * トークンの妥当性を検査
- */
-bool is_token_valid(const struct token* tok)
-{
-    if (tok == NULL)
-        return false;
-
-    if (tok->type == TOKEN_TYPE_EOL)
-        return (tok->str == NULL);
-
-    return (tok->type != TOKEN_TYPE_UNKNOWN && tok->str != NULL);
 }
 
 /*
@@ -216,7 +194,6 @@ struct token* token_stream_get_current_token(
     assert(tok_stream != NULL);
     return (tok_stream->num_tokens == 0 ? NULL :
             tok_stream->current_index >= tok_stream->num_tokens ? NULL :
-            /* tok_stream->current_index < 0 ? NULL : */
             &tok_stream->tokens[tok_stream->current_index]);
 }
 
@@ -277,7 +254,6 @@ bool token_stream_move_back(struct token_stream* tok_stream, size_t times)
 
     if (times > tok_stream->current_index) {
         tok_stream->current_index = 0;
-        /* tok_stream->current_index = -1; */
         return false;
     }
 
@@ -311,7 +287,7 @@ void dump_token_stream(FILE* fp, const struct token_stream* tok_stream)
  */
 bool get_token_stream(char* input, struct token_stream* tok_stream)
 {
-    int i;
+    size_t i;
     size_t input_length;
     size_t token_begin_index = 0;
 
@@ -320,7 +296,6 @@ bool get_token_stream(char* input, struct token_stream* tok_stream)
 
     char ch;
     char next_ch;
-    /* char prev_ch; */
     
     assert(input != NULL);
     input_length = strlen(input);
@@ -334,7 +309,6 @@ bool get_token_stream(char* input, struct token_stream* tok_stream)
     /* 文字列の解析 */
     for (i = 0; i < input_length; ++i) {
         ch = input[i];
-        /* prev_ch = (i > 1) ? input[i - 1] : '\0'; */
         next_ch = (i < input_length - 1) ? input[i + 1] : '\0';
 
 reprocess:
@@ -343,7 +317,6 @@ reprocess:
                 /* 初期状態 */
                 if (ch == '"') {
                     /* ダブルクォーテーションで囲まれた文字列 */
-                    /* TODO: エスケープシーケンスの処理を追加 */
                     current_state = LEXER_STATE_DOUBLE_QUOTED_STRING;
                     token_begin_index = i + 1;
                 } else if (ch == '\'') {
@@ -424,7 +397,7 @@ reprocess:
                 if (ch == '"') {
                     /* トークンの作成 */
                     if (!create_token(input, token_begin_index,
-                                      i - token_begin_index - 1,
+                                      i - token_begin_index,
                                       TOKEN_TYPE_ARGUMENT, &new_token))
                         goto fail;
                     /* トークンストリームにトークンを追加 */
@@ -441,7 +414,7 @@ reprocess:
                 if (ch == '\'') {
                     /* トークンの作成 */
                     if (!create_token(input, token_begin_index,
-                                      i - token_begin_index - 1,
+                                      i - token_begin_index,
                                       TOKEN_TYPE_ARGUMENT, &new_token))
                         goto fail;
                     /* トークンストリームにトークンを追加 */

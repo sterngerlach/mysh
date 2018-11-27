@@ -34,7 +34,6 @@ enum token_type {
     TOKEN_TYPE_AND_AND,
     TOKEN_TYPE_OR,
     TOKEN_TYPE_ARGUMENT,
-    TOKEN_TYPE_EOL,
 };
 
 /*
@@ -76,11 +75,6 @@ bool create_token(
  * トークンを破棄
  */
 void free_token(struct token* tok);
-
-/*
- * トークンの妥当性を検査
- */
-bool is_token_valid(const struct token* tok);
 
 /*
  * トークンストリームを初期化
