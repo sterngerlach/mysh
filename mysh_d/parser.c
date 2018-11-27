@@ -25,10 +25,9 @@ const char* execution_mode_to_string(enum execution_mode exec_mode)
         "EXECUTE_NEXT_WHEN_FAILED", "EXECUTE_SEQUENTIALLY",
         "EXECUTE_IN_BACKGROUND" };
 
-    assert((int)exec_mode >= 0);
-    assert((int)exec_mode < sizeof(execution_mode_str) / sizeof(execution_mode_str[0]));
+    assert((size_t)exec_mode < sizeof(execution_mode_str) / sizeof(execution_mode_str[0]));
 
-    return execution_mode_str[(int)exec_mode];
+    return execution_mode_str[(size_t)exec_mode];
 }
 
 /*
@@ -54,7 +53,7 @@ bool initialize_simple_command(struct simple_command* simple_cmd)
  */
 void free_simple_command(struct simple_command* simple_cmd)
 {
-    int i;
+    size_t i;
 
     assert(simple_cmd != NULL);
 
@@ -78,7 +77,7 @@ void free_simple_command(struct simple_command* simple_cmd)
  */
 bool append_argument(struct simple_command* simple_cmd, const char* arg)
 {
-    int capacity_arguments;
+    size_t capacity_arguments;
     char** new_arguments;
     char* new_argument;
 
@@ -121,8 +120,7 @@ bool append_argument(struct simple_command* simple_cmd, const char* arg)
     }
     
     /* exec関数群の引数に渡せるように末尾の要素をNULLとする */
-    simple_cmd->arguments[simple_cmd->num_arguments] = new_argument;
-    simple_cmd->num_arguments++;
+    simple_cmd->arguments[simple_cmd->num_arguments++] = new_argument;
     simple_cmd->arguments[simple_cmd->num_arguments] = NULL;
 
     return true;
@@ -133,13 +131,13 @@ bool append_argument(struct simple_command* simple_cmd, const char* arg)
  */
 void dump_simple_command(FILE* fp, const struct simple_command* simple_cmd)
 {
-    int i;
+    size_t i;
     
-    fprintf(fp, "simple_command: num_arguments: %d\n",
+    fprintf(fp, "simple_command: num_arguments: %zu\n",
             simple_cmd->num_arguments);
 
     for (i = 0; i < simple_cmd->num_arguments; ++i)
-        fprintf(fp, "simple_command: argument %d: \'%s\'\n",
+        fprintf(fp, "simple_command: argument %zu: \'%s\'\n",
                 i, simple_cmd->arguments[i]);
 }
 
@@ -158,7 +156,6 @@ bool initialize_shell_command(struct shell_command* shell_cmd)
     shell_cmd->num_simple_commands = 0;
     shell_cmd->capacity_simple_commands = 0;
     shell_cmd->exec_mode = EXECUTION_MODE_NONE;
-    /* shell_cmd->job_no = -1; */
     
     /* リダイレクトに関する情報の初期化 */
     shell_cmd->redir_info.input_file_name = NULL;
@@ -173,7 +170,7 @@ bool initialize_shell_command(struct shell_command* shell_cmd)
  */
 void free_shell_command(struct shell_command* shell_cmd)
 {
-    int i;
+    size_t i;
 
     assert(shell_cmd != NULL);
 
@@ -197,7 +194,6 @@ void free_shell_command(struct shell_command* shell_cmd)
     shell_cmd->redir_info.append_output = false;
 
     shell_cmd->exec_mode = EXECUTION_MODE_NONE;
-    /* shell_cmd->job_no = -1; */
 }
 
 /*
@@ -207,7 +203,7 @@ void free_shell_command(struct shell_command* shell_cmd)
 bool append_simple_command(
     struct shell_command* shell_cmd, struct simple_command* simple_cmd)
 {
-    int capacity_simple_commands;
+    size_t capacity_simple_commands;
     struct simple_command* new_simple_commands;
 
     assert(shell_cmd != NULL);
@@ -256,9 +252,9 @@ bool append_simple_command(
  */
 void dump_shell_command(FILE* fp, struct shell_command* shell_cmd)
 {
-    int i;
+    size_t i;
 
-    fprintf(fp, "shell_command: num_simple_commands: %d\n",
+    fprintf(fp, "shell_command: num_simple_commands: %zu\n",
             shell_cmd->num_simple_commands);
     fprintf(fp, "shell_command: redir_info: input_file_name: %s\n",
             shell_cmd->redir_info.input_file_name != NULL ?
@@ -298,7 +294,7 @@ bool initialize_command(struct command* cmd)
  */
 void free_command(struct command* cmd)
 {
-    int i;
+    size_t i;
 
     assert(cmd != NULL);
 
@@ -321,7 +317,7 @@ void free_command(struct command* cmd)
 bool append_shell_command(
     struct command* cmd, struct shell_command* shell_cmd)
 {
-    int capacity_shell_commands;
+    size_t capacity_shell_commands;
     struct shell_command* new_shell_commands;
     
     /* シェルコマンドが空である場合 */
@@ -365,9 +361,9 @@ bool append_shell_command(
  */
 void dump_command(FILE* fp, struct command* cmd)
 {
-    int i;
+    size_t i;
 
-    fprintf(fp, "command: num_shell_commands: %d\n",
+    fprintf(fp, "command: num_shell_commands: %zu\n",
             cmd->num_shell_commands);
 
     for (i = 0; i < cmd->num_shell_commands; ++i)
@@ -390,8 +386,6 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
     
     assert(tok_stream != NULL);
     assert(cmd != NULL);
-    
-    /* print_message(__func__, "called\n"); */
 
     /* コマンドを初期化 */
     if (!initialize_command(cmd)) {
@@ -519,8 +513,6 @@ bool parse_shell_command(
     assert(tok_stream != NULL);
     assert(shell_cmd != NULL);
 
-    /* print_message(__func__, "called\n"); */
-
     /* コマンドを初期化 */
     if (!initialize_simple_command(&simple_cmd)) {
         print_error(__func__, "initialize_simple_command() failed\n");
@@ -598,8 +590,6 @@ bool parse_simple_command(
     assert(tok_stream != NULL);
     assert(simple_cmd != NULL);
 
-    /* print_message(__func__, "called\n"); */
-
     /* トークンストリームからトークンを取得 */
     /* トークンがなければエラー */
     if ((tok = token_stream_get_current_token(tok_stream)) == NULL) {
@@ -633,13 +623,13 @@ bool parse_simple_command(
 
         if (tok->type != TOKEN_TYPE_ARGUMENT) {
             /* トークンが識別子またはリダイレクト記号でなければ返す */
-            /* parse_redirect関数はトークンストリームのインデックスを,
-             * 次に読むべきトークンの位置まで進めてくれる */
             if (tok->type != TOKEN_TYPE_GREAT &&
                 tok->type != TOKEN_TYPE_LESS && 
                 tok->type != TOKEN_TYPE_GREAT_GREAT)
                 return true;
-
+            
+            /* parse_redirect関数はトークンストリームのインデックスを,
+             * 次に読むべきトークンの位置まで進めてくれる */
             if (!parse_redirect(tok_stream, redir_info))
                 return false;
 
@@ -677,8 +667,6 @@ bool parse_redirect(
 
     assert(tok_stream != NULL);
     assert(redir_info != NULL);
-
-    /* print_message(__func__, "called\n"); */
 
     /* トークンストリームからトークンを取得 */
     /* トークンがなければエラー */

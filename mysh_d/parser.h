@@ -52,8 +52,8 @@ enum execution_mode {
  */
 struct simple_command {
     char** arguments;           /* コマンドの引数 */
-    int    num_arguments;       /* コマンドの引数の個数 */
-    int    capacity_arguments;  /* 引数の配列の最大要素数 */
+    size_t num_arguments;       /* コマンドの引数の個数 */
+    size_t capacity_arguments;  /* 引数の配列の最大要素数 */
 };
 
 /*
@@ -70,11 +70,10 @@ struct redirect_info {
  */
 struct shell_command {
     struct simple_command* simple_commands;          /* コマンドの配列 */
-    int                    num_simple_commands;      /* コマンドの個数 */
-    int                    capacity_simple_commands; /* コマンドの配列の最大要素数 */
+    size_t                 num_simple_commands;      /* コマンドの個数 */
+    size_t                 capacity_simple_commands; /* コマンドの配列の最大要素数 */
     struct redirect_info   redir_info;               /* リダイレクトに関する情報 */
     enum execution_mode    exec_mode;                /* 実行方法 */
-    /* int                    job_no; */
 };
 
 /*
@@ -82,8 +81,8 @@ struct shell_command {
  */
 struct command {
     struct shell_command* shell_commands;            /* シェルコマンドの配列 */
-    int                   num_shell_commands;        /* シェルコマンドの個数 */
-    int                   capacity_shell_commands;   /* シェルコマンドの配列の最大要素数 */
+    size_t                num_shell_commands;        /* シェルコマンドの個数 */
+    size_t                capacity_shell_commands;   /* シェルコマンドの配列の最大要素数 */
 };
 
 /*
