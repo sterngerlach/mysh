@@ -6,6 +6,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <glob.h>
 #include <limits.h>
 #include <pwd.h>
 #include <signal.h>
@@ -18,6 +19,7 @@
 #include <sys/wait.h>
 
 #include "builtin.h"
+#include "dynamic_string.h"
 #include "shell.h"
 #include "util.h"
 
@@ -266,15 +268,16 @@ int wait_child_process(pid_t cpid, int* status)
  */
 bool expand_command(struct command* cmd)
 {
-    int i;
-    int j;
-    int k;
+    size_t i;
+    size_t j;
+    size_t k;
 
     char* expansion_result;
 
     struct shell_command* shell_cmd;
     struct redirect_info* redir_info;
     struct simple_command* simple_cmd;
+    struct simple_command new_simple_cmd;
     
     for (i = 0; i < cmd->num_shell_commands; ++i) {
         shell_cmd = &cmd->shell_commands[i];
@@ -359,6 +362,18 @@ bool expand_command(struct command* cmd)
                 free(simple_cmd->arguments[k]);
                 simple_cmd->arguments[k] = expansion_result;
             }
+
+            dump_simple_command(stderr, simple_cmd);
+
+            /* ワイルドカードを展開 */
+            if (!expand_wildcard(simple_cmd, &new_simple_cmd)) {
+                print_error(__func__, "expand_wildcard() failed\n");
+                return false;
+            }
+
+            /* 展開後のコマンドライン引数と入れ替え */
+            free_simple_command(simple_cmd);
+            shell_cmd->simple_commands[j] = new_simple_cmd;
         }
     }
 
@@ -374,9 +389,10 @@ bool expand_tilde(const char* str, char** result)
     char* home_dir = NULL;
     char* username = NULL;
     char* pwd = NULL;
-    size_t len;
     size_t username_len;
     struct passwd* pw;
+
+    struct dynamic_string dyn_result;
     
     /* 展開後の文字列へのポインタ */
     *result = NULL;
@@ -388,7 +404,8 @@ bool expand_tilde(const char* str, char** result)
 
     /* スラッシュの直前までの部分文字列(ユーザ名)の長さを切り出す */
     /* ユーザ名の長さが0である(チルダのみである)場合は環境変数HOMEの値で書き換え */
-    username_len = ((p = strchr(str, '/')) != NULL) ? (p - str - 1) : (strlen(str) - 1);
+    username_len = ((p = strchr(str, '/')) != NULL) ?
+                   (size_t)(p - str - 1) : (strlen(str) - 1);
 
     /* 環境変数HOMEの値で置き換える場合 */
     if (username_len == 0) {
@@ -398,19 +415,28 @@ bool expand_tilde(const char* str, char** result)
             return false;
         }
         
-        /* 必要な文字数分だけ新たにメモリを確保 */
-        /* チルダを除いた元の文字列, ホームディレクトリ, 末端のヌル文字の合計の長さ */
-        len = strlen(str + 1) + strlen(home_dir) + 1;
-
-        if ((*result = (char*)calloc(len, sizeof(char))) == NULL) {
-            print_error(__func__, "calloc() failed: %s\n", strerror(errno));
+        /* 動的文字列を作成 */
+        if (!initialize_dynamic_string(&dyn_result)) {
+            print_error(__func__, "initialize_dynamic_string() failed\n");
             return false;
         }
-        
-        /* ホームディレクトリとチルダを除いた元の文字列を順にコピー */
-        strcpy(*result, home_dir);
-        strcat(*result, str + 1);
-        (*result)[len - 1] = '\0';
+
+        /* ホームディレクトリと, チルダを除いた元の文字列を順に追加 */
+        if (!dynamic_string_append(&dyn_result, home_dir)) {
+            print_error(__func__, "dynamic_string_append() failed\n");
+            free_dynamic_string(&dyn_result);
+            return false;
+        }
+
+        if (!dynamic_string_append(&dyn_result, str + 1)) {
+            print_error(__func__, "dynamic_string_append() failed\n");
+            free_dynamic_string(&dyn_result);
+            return false;
+        }
+
+        /* 動的文字列の所有権を移動(ムーブ演算) */
+        /* 動的文字列が確保したメモリ領域を解放する必要はなし */
+        *result = move_dynamic_string(&dyn_result);
         
         return true;
     }
@@ -423,19 +449,27 @@ bool expand_tilde(const char* str, char** result)
             return false;
         }
 
-        /* 必要な文字数分だけ新たにメモリを確保 */
-        /* チルダとプラス記号を除いた元の文字列, カレントディレクトリ, 末端のヌル文字の合計の長さ */
-        len = strlen(str + 2) + strlen(pwd) + 1;
-
-        if ((*result = (char*)calloc(len, sizeof(char))) == NULL) {
-            print_error(__func__, "calloc() failed: %s\n", strerror(errno));
+        /* 動的文字列を作成 */
+        if (!initialize_dynamic_string(&dyn_result)) {
+            print_error(__func__, "initialize_dynamic_string() failed\n");
             return false;
         }
 
-        /* カレントディレクトリとチルダ及びプラス記号を除いた元の文字列を順にコピー */
-        strcpy(*result, pwd);
-        strcat(*result, str + 2);
-        (*result)[len - 1] = '\0';
+        /* カレントディレクトリと, チルダ及びプラス記号を除いた元の文字列を順に追加 */
+        if (!dynamic_string_append(&dyn_result, pwd)) {
+            print_error(__func__, "dynamic_string_append() failed\n");
+            free_dynamic_string(&dyn_result);
+            return false;
+        }
+
+        if (!dynamic_string_append(&dyn_result, str + 2)) {
+            print_error(__func__, "dynamic_string_append() failed\n");
+            free_dynamic_string(&dyn_result);
+            return false;
+        }
+
+        /* 文字列の所有権を移動 */
+        *result = move_dynamic_string(&dyn_result);
 
         return true;
     }
@@ -451,22 +485,31 @@ bool expand_tilde(const char* str, char** result)
         free(username);
         return true;
     }
-    
-    /* ユーザのホームディレクトリで置き換え */
-    /* 必要な文字数分だけ新たにメモリを確保 */
-    /* チルダとユーザ名を除いた元の文字列, ユーザのホームディレクトリ, 末端のヌル文字の合計の長さ */
-    len = strlen(str + username_len + 1) + strlen(pw->pw_dir) + 1;
 
-    if ((*result = (char*)calloc(len, sizeof(char))) == NULL) {
-        print_error(__func__, "calloc() failed: %s\n", strerror(errno));
+    /* 動的文字列を作成 */
+    if (!initialize_dynamic_string(&dyn_result)) {
+        print_error(__func__, "initialize_dynamic_string() failed\n");
         free(username);
         return false;
     }
 
-    /* 文字列を順にコピー */
-    strcpy(*result, pw->pw_dir);
-    strcat(*result, str + username_len + 1);
-    (*result)[len - 1] = '\0';
+    /* ユーザのホームディレクトリ, チルダとユーザ名を除いた元の文字列を順に追加 */
+    if (!dynamic_string_append(&dyn_result, pw->pw_dir)) {
+        print_error(__func__, "dynamic_string_append() failed\n");
+        free_dynamic_string(&dyn_result);
+        free(username);
+        return false;
+    }
+
+    if (!dynamic_string_append(&dyn_result, str + username_len + 1)) {
+        print_error(__func__, "dynamic_string_append() failed\n");
+        free_dynamic_string(&dyn_result);
+        free(username);
+        return false;
+    }
+    
+    /* 文字列の所有権を移動 */
+    *result = move_dynamic_string(&dyn_result);
 
     return true;
 }
@@ -477,20 +520,17 @@ bool expand_tilde(const char* str, char** result)
 bool expand_variable(const char* str, char** result)
 {
     int i;
-    int j;
-    int begin;
     int len;
-    int capacity;
+    int begin;
     int env_name_len;
-
-    char* env_name = NULL;
-    char* env_val = NULL;
-    char* new_result = NULL;
     char ch;
     char next_ch;
+    char* env_name = NULL;
+    char* env_val = NULL;
 
-    bool ret = true;
     bool is_env = false;
+
+    struct dynamic_string dyn_result;
 
     /* 展開後の文字列へのポインタ */
     *result = NULL;
@@ -499,18 +539,16 @@ bool expand_variable(const char* str, char** result)
     if (str[0] == '\0')
         return true;
 
-    /* 展開後の文字列のために適当な大きさのバッファを確保 */
-    /* バッファの大きさの初期値は入力文字列の長さとする */
-    len = strlen(str);
-    capacity = len;
-    
-    if ((*result = (char*)calloc(capacity + 1, sizeof(char))) == NULL) {
-        print_error(__func__, "calloc() failed: %s\n", strerror(errno));
+    /* 動的文字列を作成 */
+    if (!initialize_dynamic_string(&dyn_result)) {
+        print_error(__func__, "initialize_dynamic_string() failed\n");
         return false;
     }
+
+    len = strlen(str);
     
     /* 文字列の解析 */
-    for (i = 0, j = 0; i < len; ++i) {
+    for (i = 0; i < len; ++i) {
         ch = str[i];
         next_ch = (i < len - 1) ? str[i + 1] : '\0';
         
@@ -523,33 +561,25 @@ bool expand_variable(const char* str, char** result)
                 is_env = true;
                 begin = i + 1;
             } else {
-                /* それ以外の文字の場合は単にバッファに追加 */
-                /* バッファが溢れそうな場合は予め拡張 */
-                if (j + 1 >= capacity) {
-                    capacity += len;
-
-                    if ((new_result = (char*)realloc(*result, capacity + 1)) == NULL) {
-                        print_error(__func__, "realloc() failed: %s\n", strerror(errno));
-                        ret = false;
-                        goto cleanup;
-                    }
-
-                    *result = new_result;
+                /* それ以外の文字の場合は動的文字列に追加 */
+                if (!dynamic_string_append_char(&dyn_result, ch)) {
+                    print_error(__func__, "dynamic_string_append_char() failed\n");
+                    free_dynamic_string(&dyn_result);
+                    return false;
                 }
-                
-                /* バッファに現在の文字を追加 */
-                (*result)[j++] = ch;
-                (*result)[j] = '\0';
             }
         } else {
-            /* 環境変数の終了を判定 */
+            /* 環境変数の候補 */
             if (i == len - 1) {
+                /* 環境変数の名前の長さを取得 */
                 env_name_len = i - begin + 1;
             } else if (!(isalnum(ch) || ch == '_')) {
+                /* 環境変数の名前の長さを取得 */
                 env_name_len = i - begin;
+                /* 環境変数ではないのでフラグをリセット */
                 is_env = false;
-                /* 同じ文字(環境変数名として不正な文字)を再度処理 */
-                i--;
+                /* 同じ文字(環境変数として不正な文字)を再度処理 */
+                --i;
             } else {
                 continue;
             }
@@ -557,67 +587,102 @@ bool expand_variable(const char* str, char** result)
             /* 環境変数の名前を切り出し */
             if ((env_name = strndup(str + begin, env_name_len)) == NULL) {
                 print_error(__func__, "strndup() failed: %s\n", strerror(errno));
-                ret = false;
-                goto cleanup;
+                free_dynamic_string(&dyn_result);
+                return false;
             }
 
             /* 環境変数の値を取得 */
             if ((env_val = getenv(env_name)) == NULL) {
-                /* 指定された名前の環境変数は存在しないので単にバッファに追加 */
-                /* バッファが溢れそうな場合は領域を拡張 */
-                if (j + env_name_len + 1 >= capacity) {
-                    capacity += env_name_len + 1;
-
-                    if ((new_result = (char*)realloc(*result, capacity + 1)) == NULL) {
-                        print_error(__func__, "realloc() failed: %s\n", strerror(errno));
-                        ret = false;
-                        goto cleanup;
-                    }
-
-                    *result = new_result;
+                /* 指定された名前の環境変数は存在しない */
+                /* 動的文字列にドルマークで開始するが環境変数ではない文字列を追加 */
+                if (!dynamic_string_append_char(&dyn_result, '$')) {
+                    print_error(__func__, "dynamic_string_append_char() failed\n");
+                    free_dynamic_string(&dyn_result);
+                    free(env_name);
+                    return false;
                 }
-                
-                /* バッファにドルマークで開始するが環境変数ではない文字列を追加 */
-                strcat(*result, "$");
-                strcat(*result, env_name);
-                j += env_name_len + 1;
+
+                if (!dynamic_string_append(&dyn_result, env_name)) {
+                    print_error(__func__, "dynamic_string_append() failed\n");
+                    free_dynamic_string(&dyn_result);
+                    free(env_name);
+                    return false;
+                }
             } else {
-                /* 指定された名前の環境変数が見つかったのでバッファに追加 */
-                /* バッファが溢れそうな場合は領域を拡張 */
-                if (j + strlen(env_val) >= capacity) {
-                    capacity += strlen(env_val);
-
-                    if ((new_result = (char*)realloc(*result, capacity + 1)) == NULL) {
-                        print_error(__func__, "realloc() failed: %s\n", strerror(errno));
-                        ret = false;
-                        goto cleanup;
-                    }
-
-                    *result = new_result;
+                /* 指定された名前の環境変数が見つかった */
+                /* 動的文字列に環境変数の値を追加 */
+                if (!dynamic_string_append(&dyn_result, env_val)) {
+                    print_error(__func__, "dynamic_string_append() failed\n");
+                    free_dynamic_string(&dyn_result);
+                    free(env_name);
+                    return false;
                 }
-                
-                /* バッファに環境変数の文字列を追加 */
-                strcat(*result, env_val);
-                j += strlen(env_val);
             }
+            
+            /* 切り出した部分文字列を解放 */
+            free(env_name);
         }
     }
-    
-    /* 末尾がヌル文字で終端することを保証 */
-    (*result)[j] = '\0';
 
-cleanup:
-    if (!ret && *result != NULL) {
-        free(*result);
-        *result = NULL;
+    /* 動的文字列の所有権を移動 */
+    *result = move_dynamic_string(&dyn_result);
+    
+    return true;
+}
+
+/*
+ * ワイルドカードを展開
+ * ワイルドカードの展開を一から実装するのは大変であるため,
+ * 代わりにGNU C ライブラリ(glibc)のglob()関数を使用している
+ */
+bool expand_wildcard(
+    const struct simple_command* simple_cmd,
+    struct simple_command* result)
+{
+    size_t i;
+    size_t j;
+    int ret;
+    glob_t results;
+
+    /* 展開後の新たなコマンドライン引数 */
+    if (!initialize_simple_command(result)) {
+        print_error(__func__, "initialize_simple_command() failed\n");
+        return false;
     }
 
-    if (env_name != NULL) {
-        free(env_name);
-        env_name = NULL;
+    for (i = 0; i < simple_cmd->num_arguments; ++i) {
+        ret = glob(simple_cmd->arguments[i], 0, NULL, &results);
+        
+        if (ret == 0) {
+            /* パターンに合致するパスが見つかった場合 */
+            /* パス名を展開後のコマンドライン引数に追加 */
+            for (j = 0; j < results.gl_pathc; ++j) {
+                if (!append_argument(result, results.gl_pathv[j])) {
+                    print_error(__func__, "append_argument() failed\n");
+                    globfree(&results);
+                    return false;
+                }
+            }
+        } else if (ret == GLOB_NOMATCH) {
+            /* パターンに合致するパスが見つからなかった場合 */
+            /* 元のコマンドライン引数をそのまま展開後の結果に追加 */
+            if (!append_argument(result, simple_cmd->arguments[i])) {
+                print_error(__func__, "append_argument() failed\n");
+                globfree(&results);
+                return false;
+            }
+        } else {
+            /* それ以外の場合はエラー */
+            print_error(__func__, "glob() failed: %s\n",
+                        ret == GLOB_NOSPACE ? "GLOB_NOSPACE" :
+                        ret == GLOB_ABORTED ? "GLOB_ABORTED" :
+                        strerror(errno));
+        }
+
+        globfree(&results);
     }
-    
-    return ret;
+
+    return true;
 }
 
 /*
@@ -625,8 +690,8 @@ cleanup:
  */
 void execute_command(const struct command* cmd, bool* is_exit)
 {
-    int i;
-    int j;
+    size_t i;
+    size_t j;
 
     int fd_tty = -1;
     int fd_actual_stdin = -1;
@@ -635,14 +700,14 @@ void execute_command(const struct command* cmd, bool* is_exit)
     int fd_out = -1;
     int fd_pipe[2];
 
-    int status;
-    int exit_status;
+    int status = -1;
+    int exit_status = -1;
 
-    pid_t cpid;
-    pid_t ppid;
-    pid_t pgid_parent;
-    pid_t pgid_old;
-    pid_t pgid_child;
+    pid_t cpid = -1;
+    pid_t ppid = -1;
+    pid_t pgid_parent = -1;
+    pid_t pgid_old = -1;
+    pid_t pgid_child = -1;
 
     char* path;
 

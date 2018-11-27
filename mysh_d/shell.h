@@ -71,6 +71,15 @@ bool expand_tilde(const char* str, char** result);
 bool expand_variable(const char* str, char** result);
 
 /*
+ * ワイルドカードを展開
+ * ワイルドカードの展開を一から実装するのは大変であるため,
+ * 代わりにGNU C ライブラリ(glibc)のglob()関数を使用している
+ */
+bool expand_wildcard(
+    const struct simple_command* simple_cmd,
+    struct simple_command* result);
+
+/*
  * コマンドを実行
  */
 void execute_command(const struct command* cmd, bool* is_exit);
