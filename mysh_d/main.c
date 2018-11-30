@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "history.h"
 #include "input.h"
 #include "lexer.h"
 #include "parser.h"
@@ -23,18 +24,27 @@ int main(int argc, char** argv)
     /* コマンドライン引数の解析 */
     parse_cmdline(argc, argv);
 
+    /* コマンドの履歴を初期化 */
+    initialize_command_history(&command_history_head);
+
+    /* 入力をcbreakモードに設定 */
+    if (app_config.is_raw_mode)
+        tty_set_cbreak();
+
     /* シグナルハンドラの設定 */
     set_signal_handlers();
 
     fprintf(stderr, "welcome to mysh!\n");
 
     while (true) {
-        /* プロンプトを表示 */
-        prompt();
-
-        /* ユーザ入力の取得 */
-        if ((input = get_line()) == NULL)
-            break;
+        /* プロンプトの表示とユーザ入力の取得 */
+        if (app_config.is_raw_mode) {
+            if ((input = get_line_cbreak()) == NULL)
+                break;
+        } else {
+            if ((input = get_line()) == NULL)
+                break;
+        }
 
         /* 末尾の改行を除去 */
         chomp(input);
@@ -89,10 +99,16 @@ int main(int argc, char** argv)
                 dump_command(stderr, &cmd);
             }
         }
+
+        if (app_config.is_raw_mode)
+            tty_reset();
         
         /* コマンドを実行 */
         execute_command(&cmd, &is_exit);
 
+        if (app_config.is_raw_mode)
+            tty_set_cbreak();
+        
         if (is_exit)
             break;
 
@@ -100,6 +116,9 @@ int main(int argc, char** argv)
         free_token_stream(&tok_stream);
         free(input);
     }
+
+    /* コマンドの履歴を破棄 */
+    free_command_history(&command_history_head);
 
     fputs("Bye\n", stderr);
 
