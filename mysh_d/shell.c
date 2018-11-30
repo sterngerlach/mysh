@@ -899,7 +899,9 @@ void execute_command(const struct command* cmd, bool* is_exit)
 
                 /* コマンドの絶対パスを取得 */
                 if ((path = search_path(simple_cmd->arguments[0])) == NULL) {
-                    print_error(__func__, "search_path() failed: No such file or directory\n");
+                    print_error(__func__,
+                        "search_path() failed: No such file or directory: '%s'\n",
+                        simple_cmd->arguments[0]);
                     exit(EXIT_FAILURE);
                 }
 
