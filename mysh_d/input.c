@@ -258,6 +258,9 @@ bool handle_printable_character(struct dynamic_string* input_buffer, size_t* pos
  */
 bool handle_ctrl_a(struct dynamic_string* input_buffer, size_t* pos, int ch)
 {
+    (void)input_buffer;
+    (void)ch;
+
     /* バックスペースを印字して左端へ移動 */
     repeat_puts("\x1b[1D", *pos);
 
@@ -272,6 +275,8 @@ bool handle_ctrl_a(struct dynamic_string* input_buffer, size_t* pos, int ch)
  */
 bool handle_ctrl_e(struct dynamic_string* input_buffer, size_t* pos, int ch)
 {
+    (void)ch;
+
     /* カーソルを右端へ移動 */
     repeat_puts("\x1b[1C", input_buffer->length - *pos);
 
@@ -286,6 +291,8 @@ bool handle_ctrl_e(struct dynamic_string* input_buffer, size_t* pos, int ch)
  */
 bool handle_ctrl_b(struct dynamic_string* input_buffer, size_t* pos, int ch)
 {
+    (void)ch;
+
     /* バッファが空である場合は無視 */
     if (input_buffer->length == 0)
         return true;
@@ -306,6 +313,8 @@ bool handle_ctrl_b(struct dynamic_string* input_buffer, size_t* pos, int ch)
  */
 bool handle_ctrl_f(struct dynamic_string* input_buffer, size_t* pos, int ch)
 {
+    (void)ch;
+
     /* バッファが空である場合は無視 */
     if (input_buffer->length == 0)
         return true;
@@ -326,6 +335,8 @@ bool handle_ctrl_f(struct dynamic_string* input_buffer, size_t* pos, int ch)
  */
 bool handle_ctrl_d(struct dynamic_string* input_buffer, size_t* pos, int ch)
 {
+    (void)ch;
+
     size_t old_buffer_len;
 
     /* バッファが空である場合は無視 */
@@ -366,6 +377,8 @@ bool handle_ctrl_d(struct dynamic_string* input_buffer, size_t* pos, int ch)
  */
 bool handle_enter(struct dynamic_string* input_buffer, size_t* pos, int ch)
 {
+    (void)pos;
+
     /* バッファが空である場合はヌル文字を追加 */
     /* バッファに文字や文字列が追加されないとき, バッファはNULLのままであるため,
      * 空文字列が入力されると(何も入力しない状態でEnterキーが押されると), 
@@ -394,6 +407,8 @@ bool handle_enter(struct dynamic_string* input_buffer, size_t* pos, int ch)
 bool handle_backspace(struct dynamic_string* input_buffer, size_t* pos, int ch)
 {
     size_t old_buffer_len;
+
+    (void)ch;
 
     /* バッファが空である場合は無視 */
     if (input_buffer->length == 0)
@@ -441,6 +456,8 @@ bool handle_arrow_up(
     struct dynamic_string* input_buffer, size_t* pos, int ch,
     struct command_history_entry** current_history)
 {
+    (void)ch;
+
     /* 表示する履歴がなければ無視 */
     if (is_list_empty(&command_history_head.entry))
         return true;
@@ -495,6 +512,8 @@ bool handle_arrow_down(
     struct dynamic_string* input_buffer, size_t* pos, int ch,
     struct command_history_entry** current_history)
 {
+    (void)ch;
+
     /* 表示する履歴がなければ無視 */
     if (is_list_empty(&command_history_head.entry))
         return true;
