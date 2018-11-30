@@ -18,6 +18,7 @@
  */
 struct shell_config {
     bool is_debug_mode;     /* デバッグモードかどうか */
+    bool is_raw_mode;       /* 入力がcbreakモードかどうか */
 };
 
 /*

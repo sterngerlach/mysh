@@ -20,6 +20,7 @@
 
 #include "builtin.h"
 #include "dynamic_string.h"
+#include "input.h"
 #include "shell.h"
 #include "util.h"
 
@@ -39,16 +40,21 @@ struct shell_config app_config;
 void parse_cmdline(int argc, char** argv)
 {
     /* オプションのフォーマット文字列 */
-    static const char* const option_str = "d";
+    static const char* const option_str = "dr";
 
     /* 有効なオプションの配列 */
     static const struct option long_options[] = {
         { "debug",  no_argument,    NULL, 'd' },
+        { "raw",    no_argument,    NULL, 'r' },
         { NULL,     0,              NULL, 0   }
     };
     
     int opt;
     int opt_index;
+
+    /* シェルの設定を初期化 */
+    app_config.is_debug_mode = false;
+    app_config.is_raw_mode = false;
     
     /* オプションの取得 */
     while ((opt = getopt_long(argc, argv,
@@ -57,6 +63,10 @@ void parse_cmdline(int argc, char** argv)
             case 'd':
                 /* シェルをデバッグモードで起動 */
                 app_config.is_debug_mode = true;
+                break;
+            case 'r':
+                /* シェルの入力をcbreakモードに設定 */
+                app_config.is_raw_mode = true;
                 break;
             default:
                 /* それ以外のオプションは無視 */
@@ -278,6 +288,9 @@ bool expand_command(struct command* cmd)
     struct redirect_info* redir_info;
     struct simple_command* simple_cmd;
     struct simple_command new_simple_cmd;
+
+    /* 展開処理のためにメモリ領域の動的確保と解放が何度も行われているため
+     * 大変非効率になっている */
     
     for (i = 0; i < cmd->num_shell_commands; ++i) {
         shell_cmd = &cmd->shell_commands[i];
@@ -290,11 +303,17 @@ bool expand_command(struct command* cmd)
                 print_error(__func__, "expand_tilde() failed\n");
                 return false;
             }
-            
+
             /* 文字列が置き換わった場合は, 置き換える前の文字列を破棄 */
             /* redir_info->input_file_nameにはstrdup()関数の戻り値が格納されているため,
              * free()関数によって解放することができる */
             if (expansion_result != NULL) {
+                /* デバッグ情報の表示 */
+                if (app_config.is_debug_mode)
+                    print_message(__func__,
+                        "tilde expansion of redirect input file name: %s --> %s\n",
+                        redir_info->input_file_name, expansion_result);
+
                 free(redir_info->input_file_name);
                 redir_info->input_file_name = expansion_result;
             }
@@ -304,6 +323,12 @@ bool expand_command(struct command* cmd)
                 print_error(__func__, "expand_variable() failed\n");
                 return false;
             }
+            
+            /* デバッグ情報の表示 */
+            if (app_config.is_debug_mode)
+                print_message(__func__,
+                    "environment variable expansion of redirect input file name: %s --> %s\n",
+                    redir_info->input_file_name, expansion_result);
             
             free(redir_info->input_file_name);
             redir_info->input_file_name = expansion_result;
@@ -320,6 +345,12 @@ bool expand_command(struct command* cmd)
             /* redir_info->output_file_nameにはstrdup()関数の戻り値が格納されているため,
              * free()関数によって解放することができる */
             if (expansion_result != NULL) {
+                /* デバッグ情報の表示 */
+                if (app_config.is_debug_mode)
+                    print_message(__func__,
+                        "tilde expansion of redirect output file name: %s --> %s\n",
+                        redir_info->output_file_name, expansion_result);
+
                 free(redir_info->output_file_name);
                 redir_info->output_file_name = expansion_result;
             }
@@ -329,6 +360,12 @@ bool expand_command(struct command* cmd)
                 print_error(__func__, "expand_variable() failed\n");
                 return false;
             }
+
+            /* デバッグ情報の表示 */
+            if (app_config.is_debug_mode)
+                print_message(__func__,
+                    "environment variable expansion of redirect output file name: %s --> %s\n",
+                    redir_info->output_file_name, expansion_result);
             
             free(redir_info->output_file_name);
             redir_info->output_file_name = expansion_result;
@@ -349,6 +386,12 @@ bool expand_command(struct command* cmd)
                 /* simple_cmd->argumentsにはstrndup()関数の戻り値が格納されているため,
                  * free()関数によって解放することができる */
                 if (expansion_result != NULL) {
+                    /* デバッグ情報の表示 */
+                    if (app_config.is_debug_mode)
+                        print_message(__func__,
+                            "tilde expansion of argument: %s --> %s\n",
+                            simple_cmd->arguments[k], expansion_result);
+
                     free(simple_cmd->arguments[k]);
                     simple_cmd->arguments[k] = expansion_result;
                 }
@@ -359,11 +402,15 @@ bool expand_command(struct command* cmd)
                     return false;
                 }
 
+                /* デバッグ情報の表示 */
+                if (app_config.is_debug_mode)
+                    print_message(__func__,
+                        "environment variable expansion of argument: %s --> %s\n",
+                        simple_cmd->arguments[k], expansion_result);
+
                 free(simple_cmd->arguments[k]);
                 simple_cmd->arguments[k] = expansion_result;
             }
-
-            dump_simple_command(stderr, simple_cmd);
 
             /* ワイルドカードを展開 */
             if (!expand_wildcard(simple_cmd, &new_simple_cmd)) {
@@ -571,7 +618,7 @@ bool expand_variable(const char* str, char** result)
         } else {
             /* 環境変数の候補 */
             if (i == len - 1) {
-                /* 環境変数の名前の長さを取得 */
+                /* 環境変数の名前の長さを取得(文字列の末尾の場合は1文字増える) */
                 env_name_len = i - begin + 1;
             } else if (!(isalnum(ch) || ch == '_')) {
                 /* 環境変数の名前の長さを取得 */
