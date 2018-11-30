@@ -48,7 +48,7 @@ int main(int argc, char** argv)
         if (iscntrl(c)) {
             printf("%d\n", c);
         } else {
-            printf("%c ('%c')\n", c, c);
+            printf("%d ('%c')\n", c, c);
         }
 
         if (c == 'q')
