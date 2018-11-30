@@ -50,5 +50,34 @@ bool dynamic_string_append_substring(
  */
 bool dynamic_string_append_char(struct dynamic_string* dyn_str, char c);
 
+/*
+ * 単一の文字を指定された位置に追加
+ */
+bool dynamic_string_insert_char(
+    struct dynamic_string* dyn_str, char c, size_t index);
+
+/*
+ * 文字列を指定された位置に追加
+ */
+bool dynamic_string_insert(
+    struct dynamic_string* dyn_str, const char* str, size_t index);
+
+/*
+ * 指定されたインデックスの文字を削除
+ */
+bool dynamic_string_remove_at(
+    struct dynamic_string* dyn_str, size_t index);
+
+/*
+ * 文字列を全て削除
+ */
+bool dynamic_string_remove_all(struct dynamic_string* dyn_str);
+
+/*
+ * 指定された範囲の文字列を削除
+ */
+bool dynamic_string_remove_range(
+    struct dynamic_string* dyn_str, size_t index, size_t len);
+
 #endif /* DYNAMIC_STRING_H */
 
