@@ -41,9 +41,24 @@ void builtin_cd(int argc, char** args, bool* is_exit);
 void builtin_pwd(int argc, char** args, bool* is_exit);
 
 /*
+ * historyコマンドの処理
+ */
+void builtin_history(int argc, char** args, bool* is_exit);
+
+/*
+ * helpコマンドの処理
+ */
+void builtin_help(int argc, char** args, bool* is_exit);
+
+/*
  * exitコマンドの処理
  */
 void builtin_exit(int argc, char** args, bool* is_exit);
+
+/*
+ * teraコマンドの処理
+ */
+void builtin_tera(int argc, char** args, bool* is_exit);
 
 #endif /* BUILTIN_H */
 

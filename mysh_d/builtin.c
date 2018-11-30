@@ -12,16 +12,21 @@
 #include <unistd.h>
 
 #include "builtin.h"
+#include "history.h"
+#include "input.h"
 #include "util.h"
 
 /*
  * ビルトインコマンドの一覧
  */
 struct builtin_command_table builtin_commands[] = {
-    { "cd",     builtin_cd },
-    { "pwd",    builtin_pwd },
-    { "exit",   builtin_exit },
-    { NULL,     NULL },
+    { "cd",         builtin_cd },
+    { "pwd",        builtin_pwd },
+    { "history",    builtin_history },
+    { "help",       builtin_help },
+    { "exit",       builtin_exit },
+    { "tera",       builtin_tera },
+    { NULL,         NULL },
 };
 
 /*
@@ -105,6 +110,60 @@ void builtin_pwd(int argc, char** args, bool* is_exit)
 }
 
 /*
+ * historyコマンドの処理
+ */
+void builtin_history(int argc, char** args, bool* is_exit)
+{
+    struct command_history_entry* iter;
+    int index = 0;
+
+    (void)argc;
+    (void)args;
+    (void)is_exit;
+        
+    /* 入力されたコマンドの履歴を表示 */
+    list_for_each_entry(iter, &command_history_head.entry, struct command_history_entry, entry)
+        fprintf(stderr, "%d %s\n", index++, iter->command);
+}
+
+/*
+ * helpコマンドの処理
+ */
+void builtin_help(int argc, char** args, bool* is_exit)
+{
+    (void)argc;
+    (void)args;
+    (void)is_exit;
+    
+    fprintf(stderr,
+        "mysh: my own shell in 5,000 lines of C code\n"
+        "build time: %s - %s\n"
+        "usage: mysh [option]...\n\n"
+        "available options: \n"
+        "    -d, --debug    "
+        "launch shell in debug mode (enable verbose outputs)\n"
+        "    -r, --raw      "
+        "set terminal to cbreak mode (see input.c) and then retrieve the user input\n"
+        "                   "
+        "Ctrl-A, Ctrl-E, Ctrl-B, Ctrl-F, Ctrl-P, Ctrl-N, Up, Down, Right, Left, "
+        "Backspace, Ctrl-H, Del, Ctrl-D are enabled\n\n"
+        "built-in commands: \n"
+        "    help           "
+        "show help\n"
+        "    cd <path>      "
+        "set current working directory to <path>\n"
+        "    pwd            "
+        "show current working directory\n"
+        "    history        "
+        "show shell command history\n"
+        "    exit           "
+        "exit mysh\n"
+        "    tera           "
+        "???\n",
+        __DATE__, __TIME__);
+}
+
+/*
  * exitコマンドの処理
  */
 void builtin_exit(int argc, char** args, bool* is_exit)
@@ -113,5 +172,17 @@ void builtin_exit(int argc, char** args, bool* is_exit)
     (void)args;
 
     *is_exit = true;
+}
+
+/*
+ * teraコマンドの処理
+ */
+void builtin_tera(int argc, char** args, bool* is_exit)
+{
+    (void)argc;
+    (void)args;
+    (void)is_exit;
+
+    fprintf(stderr, "We love Prof. Teraoka!\n");
 }
 
