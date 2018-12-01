@@ -402,6 +402,7 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
     /* 最低1つ以上のシェルコマンドがない場合はエラー */
     if (!parse_shell_command(tok_stream, &shell_cmd)) {
         print_error(__func__, "no command is given\n");
+        free_shell_command(&shell_cmd);
         return false;
     }
     
@@ -414,6 +415,7 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
             /* シェルコマンドを追加 */
             if (!append_shell_command(cmd, &shell_cmd)) {
                 print_error(__func__, "append_shell_command() failed\n");
+                free_shell_command(&shell_cmd);
                 return false;
             }
 
@@ -468,6 +470,7 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
         /* ここでシェルコマンドを追加 */
         if (!append_shell_command(cmd, &shell_cmd)) {
             print_error(__func__, "append_shell_command() failed\n");
+            free_shell_command(&shell_cmd);
             return false;
         }
 
@@ -492,6 +495,7 @@ bool parse_command(struct token_stream* tok_stream, struct command* cmd)
         /* シェルコマンドを解析 */
         if (!parse_shell_command(tok_stream, &shell_cmd)) {
             print_error(__func__, "parse_shell_command() failed\n");
+            free_shell_command(&shell_cmd);
             return false;
         }
     }
@@ -522,12 +526,14 @@ bool parse_shell_command(
     /* 最低1つ以上のコマンドがない場合はエラー */
     if (!parse_simple_command(tok_stream, &simple_cmd, &shell_cmd->redir_info)) {
         print_error(__func__, "no command is given\n");
+        free_simple_command(&simple_cmd);
         return false;
     }
 
     /* コマンドを追加 */
     if (!append_simple_command(shell_cmd, &simple_cmd)) {
         print_error(__func__, "append_simple_command() failed\n");
+        free_simple_command(&simple_cmd);
         return false;
     }
     
@@ -557,18 +563,21 @@ bool parse_shell_command(
         /* コマンドを再度初期化 */
         if (!initialize_simple_command(&simple_cmd)) {
             print_error(__func__, "initialize_simple_command() failed\n");
+            free_simple_command(&simple_cmd);
             return false;
         }
 
         /* コマンドを解析 */
         if (!parse_simple_command(tok_stream, &simple_cmd, &shell_cmd->redir_info)) {
             print_error(__func__, "parse_simple_command() failed\n");
+            free_simple_command(&simple_cmd);
             return false;
         }
 
         /* コマンドを追加 */
         if (!append_simple_command(shell_cmd, &simple_cmd)) {
             print_error(__func__, "append_simple_command() failed\n");
+            free_simple_command(&simple_cmd);
             return false;
         }
     }
