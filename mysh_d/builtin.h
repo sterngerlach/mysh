@@ -60,5 +60,10 @@ void builtin_exit(int argc, char** args, bool* is_exit);
  */
 void builtin_tera(int argc, char** args, bool* is_exit);
 
+/*
+ * self-introductionコマンドの処理
+ */
+void builtin_self_introduction(int argc, char** args, bool* is_exit);
+
 #endif /* BUILTIN_H */
 

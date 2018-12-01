@@ -20,13 +20,14 @@
  * ビルトインコマンドの一覧
  */
 struct builtin_command_table builtin_commands[] = {
-    { "cd",         builtin_cd },
-    { "pwd",        builtin_pwd },
-    { "history",    builtin_history },
-    { "help",       builtin_help },
-    { "exit",       builtin_exit },
-    { "tera",       builtin_tera },
-    { NULL,         NULL },
+    { "cd",                 builtin_cd },
+    { "pwd",                builtin_pwd },
+    { "history",            builtin_history },
+    { "help",               builtin_help },
+    { "exit",               builtin_exit },
+    { "tera",               builtin_tera },
+    { "self-introduction",  builtin_self_introduction },
+    { NULL,                 NULL },
 };
 
 /*
@@ -157,25 +158,27 @@ void builtin_help(int argc, char** args, bool* is_exit)
         "build time: %s - %s\n"
         "usage: mysh [option]...\n\n"
         "available options: \n"
-        "    -d, --debug    "
+        "    -d, --debug        "
         "launch shell in debug mode (enable verbose outputs)\n"
-        "    -r, --raw      "
+        "    -r, --raw          "
         "set terminal to cbreak mode (see input.c) and then retrieve the user input\n"
-        "                   "
+        "                       "
         "Ctrl-A, Ctrl-E, Ctrl-B, Ctrl-F, Ctrl-P, Ctrl-N, Up, Down, Right, Left, "
         "Backspace, Ctrl-H, Del, Ctrl-D are enabled\n\n"
         "built-in commands: \n"
-        "    help           "
+        "    help               "
         "show help\n"
-        "    cd <path>      "
+        "    cd <path>          "
         "set current working directory to <path>\n"
-        "    pwd            "
+        "    pwd                "
         "show current working directory\n"
-        "    history        "
+        "    history            "
         "show shell command history\n"
-        "    exit           "
+        "    exit               "
         "exit mysh\n"
-        "    tera           "
+        "    tera               "
+        "???\n"
+        "    self-introduction  "
         "???\n",
         __DATE__, __TIME__);
 }
@@ -201,5 +204,40 @@ void builtin_tera(int argc, char** args, bool* is_exit)
     (void)is_exit;
 
     fprintf(stderr, "We love Prof. Teraoka!\n");
+}
+
+/*
+ * self-introductionコマンドの処理
+ */
+void builtin_self_introduction(int argc, char** args, bool* is_exit)
+{
+    (void)argc;
+    (void)args;
+    (void)is_exit;
+
+    fprintf(stderr,
+        "I like collecting CDs and vinyl LPs.\n"
+        "So, here are my top 20 favorite albums of all time :-)\n\n"
+        " 1. Taeko Ohnuki / Purissima (1988)\n"
+        " 2. Akiko Yano / Granola (1987)\n"
+        " 3. Rajie / Espresso (1985)\n"
+        " 4. Tatsuro Yamashita / Boku-no Naka-no Shonen (1988)\n"
+        " 5. Taeko Ohnuki / Cliche (1982)\n"
+        " 6. Seri Ishikawa / Rakuen (1985)\n"
+        " 7. Taeko Ohnuki / A Slice of Life (1987)\n"
+        " 8. Akiko Yano / Touge No Wagaya (1986)\n"
+        " 9. Pizzicato Five / Sweet Pizzicato Five (1992)\n"
+        "10. Yukihiro Takahashi / Once A Fool... (1985)\n"
+        "11. Taeko Ohnuki / Signifie (1983)\n"
+        "12. Yellow Magic Orchestra / BGM (1981)\n"
+        "13. P-Model / Karkador (1985)\n"
+        "14. Ryuichi Sakamoto / Ongaku Zukan (1984)\n"
+        "15. Akiko Yano / Welcome Back (1989)\n"
+        "16. Mariya Takeuchi / Request (1987)\n"
+        "17. EPO / Pump! Pump! (1986)\n"
+        "18. Minako Yoshida / Dark Crystal (1989)\n"
+        "19. Haruomi Hosono / SFX (1984)\n"
+        "20. Happy End / Kazemachi Roman (1971)\n\n"
+        "I guess you know some of them. Thank you!\n");
 }
 
