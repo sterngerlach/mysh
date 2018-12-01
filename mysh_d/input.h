@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <termios.h>
 
+#include "dynamic_string.h"
 #include "history.h"
 
 /*
@@ -62,6 +63,63 @@ void repeat_putc(int ch, size_t times);
  * 同じ文字列を指定された回数だけ出力
  */
 void repeat_puts(char* str, size_t times);
+
+/*
+ * 印字可能な文字(制御文字でない文字)の処理
+ */
+bool handle_printable_character(
+    struct dynamic_string* input_buffer, size_t* pos, int ch);
+
+/*
+ * Ctrl-Aの処理(カーソルを左端に戻す処理)
+ */
+bool handle_ctrl_a(struct dynamic_string* input_buffer, size_t* pos, int ch);
+
+/*
+ * Ctrl-Eの処理(カーソルを右端に移す処理)
+ */
+bool handle_ctrl_e(struct dynamic_string* input_buffer, size_t* pos, int ch);
+
+/*
+ * Ctrl-Bの処理(カーソルを1つ左に移動させる処理)
+ */
+bool handle_ctrl_b(struct dynamic_string* input_buffer, size_t* pos, int ch);
+
+/*
+ * Ctrl-Fの処理(カーソルを1つ右に移動させる処理)
+ */
+bool handle_ctrl_f(struct dynamic_string* input_buffer, size_t* pos, int ch);
+
+/*
+ * Ctrl-Dの処理(カーソル位置の文字を消去)
+ */
+bool handle_ctrl_d(struct dynamic_string* input_buffer, size_t* pos, int ch);
+
+/*
+ * Enterキーの処理(改行文字をバッファに追加)
+ */
+bool handle_enter(
+    struct dynamic_string* input_buffer, size_t* pos, int ch,
+    struct command_history_entry** current_history);
+
+/*
+ * Backspaceキーの処理(カーソルの直前の文字を消去)
+ */
+bool handle_backspace(struct dynamic_string* input_buffer, size_t* pos, int ch);
+
+/*
+ * 上方向キーの処理(以前に入力したコマンドの履歴を表示
+ */
+bool handle_arrow_up(
+    struct dynamic_string* input_buffer, size_t* pos, int ch,
+    struct command_history_entry** current_history);
+
+/*
+ * 下方向キーの処理(以前に入力したコマンドの履歴を表示)
+ */
+bool handle_arrow_down(
+    struct dynamic_string* input_buffer, size_t* pos, int ch,
+    struct command_history_entry** current_history);
 
 /*
  * ユーザの入力文字列を取得(cbreakモード)

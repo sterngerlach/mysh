@@ -204,7 +204,8 @@ void repeat_puts(char* str, size_t times)
 /*
  * 印字可能な文字(制御文字でない文字)の処理
  */
-bool handle_printable_character(struct dynamic_string* input_buffer, size_t* pos, int ch)
+bool handle_printable_character(
+    struct dynamic_string* input_buffer, size_t* pos, int ch)
 {
     size_t old_buffer_len;
 
@@ -294,12 +295,16 @@ bool handle_ctrl_b(struct dynamic_string* input_buffer, size_t* pos, int ch)
     (void)ch;
 
     /* バッファが空である場合は無視 */
-    if (input_buffer->length == 0)
+    if (input_buffer->length == 0) {
+        fputc('\a', stderr);
         return true;
+    }
 
     /* カーソルが左端にある場合は無視 */
-    if (*pos < 1)
+    if (*pos < 1) {
+        fputc('\a', stderr);
         return true;
+    }
 
     /* カーソルを1つ左へ進める */
     fputc('\b', stderr);
@@ -316,12 +321,16 @@ bool handle_ctrl_f(struct dynamic_string* input_buffer, size_t* pos, int ch)
     (void)ch;
 
     /* バッファが空である場合は無視 */
-    if (input_buffer->length == 0)
+    if (input_buffer->length == 0) {
+        fputc('\a', stderr);
         return true;
+    }
 
     /* カーソルが右端にある場合は無視 */
-    if (*pos >= input_buffer->length)
+    if (*pos >= input_buffer->length) {
+        fputc('\a', stderr);
         return true;
+    }
 
     /* カーソルを1つ右へ進める */
     fputs("\x1b[1C", stderr);
@@ -340,12 +349,16 @@ bool handle_ctrl_d(struct dynamic_string* input_buffer, size_t* pos, int ch)
     size_t old_buffer_len;
 
     /* バッファが空である場合は無視 */
-    if (input_buffer->length == 0)
+    if (input_buffer->length == 0) {
+        fputc('\a', stderr);
         return true;
+    }
     
     /* カーソルが右端にある場合は無視 */
-    if (*pos >= input_buffer->length)
+    if (*pos >= input_buffer->length) {
+        fputc('\a', stderr);
         return true;
+    }
 
     /* 以前の入力バッファの長さを保存 */
     old_buffer_len = input_buffer->length;
@@ -375,7 +388,9 @@ bool handle_ctrl_d(struct dynamic_string* input_buffer, size_t* pos, int ch)
 /*
  * Enterキーの処理(改行文字をバッファに追加)
  */
-bool handle_enter(struct dynamic_string* input_buffer, size_t* pos, int ch)
+bool handle_enter(
+    struct dynamic_string* input_buffer, size_t* pos, int ch,
+    struct command_history_entry** current_history)
 {
     (void)pos;
 
@@ -397,7 +412,18 @@ bool handle_enter(struct dynamic_string* input_buffer, size_t* pos, int ch)
 
     /* 入力された文字を画面に表示 */
     fputc(ch, stderr);
+
+    /* 履歴を更新 */
+    if (!update_command_history(&command_history_head, input_buffer->buffer)) {
+        print_error(__func__, "update_command_history() failed\n");
+        free_dynamic_string(input_buffer);
+        return false;
+    }
     
+    /* 履歴の表示で使用する最初の履歴を更新 */
+    *current_history = get_last_list_entry(
+        &command_history_head, struct command_history_entry, entry);
+
     return true;
 }
 
@@ -411,12 +437,16 @@ bool handle_backspace(struct dynamic_string* input_buffer, size_t* pos, int ch)
     (void)ch;
 
     /* バッファが空である場合は無視 */
-    if (input_buffer->length == 0)
+    if (input_buffer->length == 0) {
+        fputc('\a', stderr);
         return true;
+    }
 
     /* カーソルが左端にある場合は無視 */
-    if (*pos < 1)
+    if (*pos < 1) {
+        fputc('\a', stderr);
         return true;
+    }
 
     /* 以前の入力バッファの長さを保存 */
     old_buffer_len = input_buffer->length;
@@ -429,7 +459,7 @@ bool handle_backspace(struct dynamic_string* input_buffer, size_t* pos, int ch)
     }
     
     /* 1文字分左に移動 */
-    fputs("\x1b[1D", stderr);
+    fputc('\b', stderr);
 
     /* カーソル位置を更新 */
     (*pos)--;
@@ -501,7 +531,7 @@ bool handle_arrow_up(
     /* 表示する履歴を前に進める */
     *current_history = get_prev_list_entry(
         *current_history, struct command_history_entry, entry);
-    
+   
     return true;
 }
 
@@ -605,54 +635,61 @@ char* get_line_cbreak()
             handle_printable_character(&input_buffer, &pos, ch);
         } else if (ch == '\x01') {
             /* Ctrl-Aの処理 */
-            if (!handle_ctrl_a(&input_buffer, &pos, ch))
+            if (!handle_ctrl_a(&input_buffer, &pos, ch)) {
+                print_error(__func__, "handle_ctrl_a() failed\n");
                 return NULL;
+            }
         } else if (ch == '\x05') {
             /* Ctrl-Eの処理 */
-            if (!handle_ctrl_e(&input_buffer, &pos, ch))
+            if (!handle_ctrl_e(&input_buffer, &pos, ch)) {
+                print_error(__func__, "handle_ctrl_e() failed\n");
                 return NULL;
+            }
         } else if (ch == '\x02') {
             /* Ctrl-Bの処理 */
-            if (!handle_ctrl_b(&input_buffer, &pos, ch))
+            if (!handle_ctrl_b(&input_buffer, &pos, ch)) {
+                print_error(__func__, "handle_ctrl_b() failed\n");
                 return NULL;
+            }
         } else if (ch == '\x06') {
             /* Ctrl-Fの処理 */
-            if (!handle_ctrl_f(&input_buffer, &pos, ch))
+            if (!handle_ctrl_f(&input_buffer, &pos, ch)) {
+                print_error(__func__, "handle_ctrl_f() failed\n");
                 return NULL;
+            }
         } else if (ch == '\x04') {
             /* Ctrl-Dの処理 */
-            if (!handle_ctrl_d(&input_buffer, &pos, ch))
+            if (!handle_ctrl_d(&input_buffer, &pos, ch)) {
+                print_error(__func__, "handle_ctrl_d() failed\n");
                 return NULL;
+            }
         } else if (ch == '\n') {
             /* Enterキーの処理 */
-            if (!handle_enter(&input_buffer, &pos, ch))
+            if (!handle_enter(&input_buffer, &pos, ch, &current_history)) {
+                print_error(__func__, "handle_enter() failed\n");
                 return NULL;
-
-            /* 履歴を更新 */
-            if (!update_command_history(&command_history_head, input_buffer.buffer)) {
-                print_error(__func__, "update_command_history() failed\n");
-                free_dynamic_string(&input_buffer);
-                return false;
             }
-            
-            /* 履歴の表示で使用する最初の履歴を更新 */
-            current_history = get_last_list_entry(
-                &command_history_head, struct command_history_entry, entry);
 
             /* 動的文字列が保持していたバッファを返す */
             return move_dynamic_string(&input_buffer);
         } else if (ch == '\x08' || ch == 0x7F) {
             /* Backspaceキーの処理 */
-            if (!handle_backspace(&input_buffer, &pos, ch))
+            if (!handle_backspace(&input_buffer, &pos, ch)) {
+                print_error(__func__, "handle_backspace() failed\n");
                 return NULL;
+            }
         } else if (ch == 14) {
             /* Ctrl-Nの処理 */
-            if (!handle_arrow_down(&input_buffer, &pos, ch, &current_history))
+            if (!handle_arrow_down(&input_buffer, &pos, ch, &current_history)) {
+                print_error(__func__, "handle_arrow_down() failed\n");
                 return NULL;
+            }
         } else if (ch == 16) {
             /* Ctrl-Pの処理 */
-            if (!handle_arrow_up(&input_buffer, &pos, ch, &current_history))
+            if (!handle_arrow_up(&input_buffer, &pos, ch, &current_history)) {
+                print_error(__func__, "handle_arrow_up() failed\n");
                 return NULL;
+            }
         } else if (ch == '\x1b') {
             /* Escキーの処理 */
 
@@ -674,14 +711,18 @@ char* get_line_cbreak()
                             case '1':
                             case '7':
                                 /* Homeキーの処理 */
-                                if (!handle_ctrl_a(&input_buffer, &pos, ch))
+                                if (!handle_ctrl_a(&input_buffer, &pos, ch)) {
+                                    print_error(__func__, "handle_ctrl_a() failed\n");
                                     return NULL;
+                                }
                                 break;
                             case '2':
                             case '8':
                                 /* Endキーの処理 */
-                                if (!handle_ctrl_e(&input_buffer, &pos, ch))
+                                if (!handle_ctrl_e(&input_buffer, &pos, ch)) {
+                                    print_error(__func__, "handle_ctrl_e() failed\n");
                                     return NULL;
+                                }
                                 break;
                         }
                     }
@@ -689,33 +730,45 @@ char* get_line_cbreak()
                     switch (seq[1]) {
                         case 'A':
                             /* 上矢印キーの処理 */
-                            if (!handle_arrow_up(&input_buffer, &pos, ch, &current_history))
+                            if (!handle_arrow_up(&input_buffer, &pos, ch, &current_history)) {
+                                print_error(__func__, "handle_arrow_up() failed\n");
                                 return NULL;
+                            }
                             break;
                         case 'B':
                             /* 下矢印キーの処理 */
-                            if (!handle_arrow_down(&input_buffer, &pos, ch, &current_history))
+                            if (!handle_arrow_down(&input_buffer, &pos, ch, &current_history)) {
+                                print_error(__func__, "handle_arrow_down() failed\n");
                                 return NULL;
+                            }
                             break;
                         case 'C':
                             /* 右矢印キーの処理 */
-                            if (!handle_ctrl_f(&input_buffer, &pos, ch))
+                            if (!handle_ctrl_f(&input_buffer, &pos, ch)) {
+                                print_error(__func__, "handle_ctrl_f() failed\n");
                                 return NULL;
+                            }
                             break;
                         case 'D':
                             /* 左矢印キーの処理 */
-                            if (!handle_ctrl_b(&input_buffer, &pos, ch))
+                            if (!handle_ctrl_b(&input_buffer, &pos, ch)) {
+                                print_error(__func__, "handle_ctrl_b() failed\n");
                                 return NULL;
+                            }
                             break;
                         case 'H':
                             /* Homeキーの処理 */
-                            if (!handle_ctrl_a(&input_buffer, &pos, ch))
+                            if (!handle_ctrl_a(&input_buffer, &pos, ch)) {
+                                print_error(__func__, "handle_ctrl_a() failed\n");
                                 return NULL;
+                            }
                             break;
                         case 'F':
                             /* Endキーの処理 */
-                            if (!handle_ctrl_e(&input_buffer, &pos, ch))
+                            if (!handle_ctrl_e(&input_buffer, &pos, ch)) {
+                                print_error(__func__, "handle_ctrl_e() failed\n");
                                 return NULL;
+                            }
                             break;
                     }
                 }
@@ -723,13 +776,17 @@ char* get_line_cbreak()
                 switch (seq[1]) {
                     case 'H':
                         /* Homeキーの処理 */
-                        if (!handle_ctrl_a(&input_buffer, &pos, ch))
+                        if (!handle_ctrl_a(&input_buffer, &pos, ch)) {
+                            print_error(__func__, "handle_ctrl_a() failed\n");
                             return NULL;
+                        }
                         break;
                     case 'F':
                         /* Endキーの処理 */
-                        if (!handle_ctrl_e(&input_buffer, &pos, ch))
+                        if (!handle_ctrl_e(&input_buffer, &pos, ch)) {
+                            print_error(__func__, "handle_ctrl_e() failed\n");
                             return NULL;
+                        }
                         break;
                 }
             }
