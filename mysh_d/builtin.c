@@ -50,6 +50,7 @@ void builtin_cd(int argc, char** args, bool* is_exit)
 {
     char* env_home;
     struct passwd* pw;
+    static char pwd[PATH_MAX + 1];
 
     (void)is_exit;
 
@@ -75,12 +76,28 @@ void builtin_cd(int argc, char** args, bool* is_exit)
         }
 
         /* カレントディレクトリを変更 */
-        if (chdir(env_home) < 0)
+        if (chdir(env_home) < 0) {
             print_error(__func__, "chdir() failed: %s\n", strerror(errno));
+            return;
+        }
     } else {
         /* 指定された引数のディレクトリに移動 */
-        if (chdir(args[1]) < 0)
+        if (chdir(args[1]) < 0) {
             print_error(__func__, "chdir() failed: %s\n", strerror(errno));
+            return;
+        }
+    }
+
+    /* カレントディレクトリを取得 */
+    if (getcwd(pwd, sizeof(pwd)) == NULL) {
+        print_error(__func__, "getcwd() failed: %s\n", strerror(errno));
+        return;
+    }
+
+    /* 環境変数PWDを更新 */
+    if (setenv("PWD", pwd, 1) < 0) {
+        print_error(__func__, "setenv() failed: %s\n", strerror(errno));
+        return;
     }
 }
 
@@ -89,7 +106,7 @@ void builtin_cd(int argc, char** args, bool* is_exit)
  */
 void builtin_pwd(int argc, char** args, bool* is_exit)
 {
-    char pwd[PATH_MAX + 1];
+    static char pwd[PATH_MAX + 1];
 
     (void)args;
     (void)is_exit;
