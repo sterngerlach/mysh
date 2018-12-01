@@ -96,6 +96,11 @@ bool handle_ctrl_f(struct dynamic_string* input_buffer, size_t* pos, int ch);
 bool handle_ctrl_d(struct dynamic_string* input_buffer, size_t* pos, int ch);
 
 /*
+ * Tabキーの処理(ファイル名の自動補完)
+ */
+bool handle_tab(struct dynamic_string* input_buffer, size_t* pos, int ch);
+
+/*
  * Enterキーの処理(改行文字をバッファに追加)
  */
 bool handle_enter(

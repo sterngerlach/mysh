@@ -3,6 +3,7 @@
 /* input.c */
 
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <limits.h>
 #include <pwd.h>
@@ -386,6 +387,96 @@ bool handle_ctrl_d(struct dynamic_string* input_buffer, size_t* pos, int ch)
 }
 
 /*
+ * Tabキーの処理(ファイル名の自動補完)
+ */
+bool handle_tab(struct dynamic_string* input_buffer, size_t* pos, int ch)
+{
+    DIR* dir;
+    struct dirent* ent;
+    char* match_name = NULL;
+    char* begin = NULL;
+    int i = 0;
+    size_t match_num = 0;
+
+    (void)ch;
+
+    /* バッファが空である場合は無視 */
+    if (input_buffer->length == 0) {
+        fputc('\a', stderr);
+        return true;
+    }
+
+    /* 入力の末尾の部分のみ取得 */
+    begin = input_buffer->buffer;
+
+    for (i = input_buffer->length - 1; i >= 0; --i) {
+        if (strchr(" \t", input_buffer->buffer[i]) != NULL) {
+            begin = input_buffer->buffer + i + 1;
+            break;
+        }
+    }
+
+    /* 入力の末尾がスペースまたはタブである場合は何もしない */
+    if (!(*begin)) {
+        fputc('\a', stderr);
+        return true;
+    }
+    
+    /* カレントディレクトリが開けない場合は何もしない */
+    if ((dir = opendir(".")) == NULL)
+        return true;
+
+    /* ディレクトリ内のファイルを読み込み(エラーは無視) */
+    while ((ent = readdir(dir)) != NULL) {
+        /* 入力がファイル名の最初の部分に一致する場合 */
+        if (!strncmp(ent->d_name, begin, strlen(begin))) {
+            match_num++;
+            match_name = ent->d_name;
+        }
+    }
+
+    /* 候補が1つでない場合は何もしない */
+    if (match_num != 1)
+        return true;
+
+    /* ファイル名に完全に一致する場合は何もしない */
+    if (strlen(begin) == strlen(match_name))
+        return true;
+
+    /* カーソルを右端に移動 */
+    repeat_puts("\x1b[1C", input_buffer->length - *pos);
+    
+    /* カーソルをファイル名の始まりに移動 */
+    repeat_puts("\x1b[1D", strlen(begin));
+
+    /* 入力されたファイル名を全て消去 */
+    repeat_putc(' ', strlen(begin));
+
+    /* カーソルをファイル名の始まりに移動 */
+    repeat_puts("\x1b[1D", strlen(begin));
+
+    /* 合致したファイル名で入力バッファを置き換え */
+    if (!dynamic_string_remove_range(
+        input_buffer, begin - input_buffer->buffer, strlen(begin))) {
+        print_error(__func__, "dynamic_string_remove_all() failed\n");
+        return false;
+    }
+
+    if (!dynamic_string_append(input_buffer, match_name)) {
+        print_error(__func__, "dynamic_string_append() failed\n");
+        return false;
+    }
+    
+    /* ファイル名を表示 */
+    fprintf(stderr, "%s", match_name);
+
+    /* カーソル位置を更新 */
+    *pos = input_buffer->length;
+
+   return true;
+}
+
+/*
  * Enterキーの処理(改行文字をバッファに追加)
  */
 bool handle_enter(
@@ -661,6 +752,12 @@ char* get_line_cbreak()
             /* Ctrl-Dの処理 */
             if (!handle_ctrl_d(&input_buffer, &pos, ch)) {
                 print_error(__func__, "handle_ctrl_d() failed\n");
+                return NULL;
+            }
+        } else if (ch == '\t') {
+            /* Tabキーの処理 */
+            if (!handle_tab(&input_buffer, &pos, ch)) {
+                print_error(__func__, "handle_tab() failed\n");
                 return NULL;
             }
         } else if (ch == '\n') {
