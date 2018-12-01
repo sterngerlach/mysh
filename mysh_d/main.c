@@ -19,7 +19,7 @@ int main(int argc, char** argv)
     char* input;
     struct token_stream tok_stream;
     struct command cmd;
-    bool is_exit;
+    bool is_exit = false;
 
     /* コマンドライン引数の解析 */
     parse_cmdline(argc, argv);
@@ -116,6 +116,10 @@ int main(int argc, char** argv)
         free_token_stream(&tok_stream);
         free(input);
     }
+
+    free_command(&cmd);
+    free_token_stream(&tok_stream);
+    free(input);
 
     /* コマンドの履歴を破棄 */
     free_command_history(&command_history_head);
