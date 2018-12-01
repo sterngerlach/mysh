@@ -7,7 +7,7 @@ CFLAGS = -MMD -MP -Os -Wall -Wextra
 LDFLAGS =
 
 OBJDIR = ./obj
-OUTDIR = ./bin
+OUTDIR = .
 
 TARGET = $(OUTDIR)/mysh
 SOURCES = $(notdir $(wildcard ./*.c))
