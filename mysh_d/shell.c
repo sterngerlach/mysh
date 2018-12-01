@@ -147,6 +147,7 @@ void set_signal_handlers()
     sigaction(SIGCHLD, &sigact, NULL);
 
     /* シグナルSIGTTINのハンドラを設定 */
+    sigact.sa_sigaction = NULL;
     sigact.sa_handler = SIG_IGN;
     sigact.sa_flags = SA_RESTART;
 
