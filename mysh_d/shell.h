@@ -42,6 +42,11 @@ void sigchld_handler(int sig, siginfo_t* info, void* q);
 void set_signal_handlers();
 
 /*
+ * シグナルハンドラのリセット
+ */
+void reset_signal_handlers();
+
+/*
  * コマンドの絶対パスを取得
  */
 char* search_path(const char* cmd);

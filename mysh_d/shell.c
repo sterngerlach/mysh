@@ -116,7 +116,25 @@ void set_signal_handlers()
 
     /* シグナルハンドラを起動したシグナル以外はブロックしない */
     sigemptyset(&sigact.sa_mask);
-    
+
+    /* シグナルSIGINTのハンドラを設定 */
+    sigact.sa_handler = SIG_IGN;
+    sigact.sa_flags = SA_RESTART;
+
+    sigaction(SIGINT, &sigact, NULL);
+
+    /* シグナルSIGQUITのハンドラを設定 */
+    sigact.sa_handler = SIG_IGN;
+    sigact.sa_flags = SA_RESTART;
+
+    sigaction(SIGQUIT, &sigact, NULL);
+
+    /* シグナルSIGTSTPのハンドラを設定 */
+    sigact.sa_handler = SIG_IGN;
+    sigact.sa_flags = SA_RESTART;
+
+    sigaction(SIGTSTP, &sigact, NULL);
+
     /* シグナルSIGCHLDのハンドラを設定 */
     /* sigact.sa_handler = SIG_DFL;
     sigact.sa_flags = SA_NOCLDWAIT; */
@@ -127,11 +145,50 @@ void set_signal_handlers()
     sigact.sa_flags = SA_SIGINFO | SA_RESTART;
 
     sigaction(SIGCHLD, &sigact, NULL);
+
+    /* シグナルSIGTTINのハンドラを設定 */
+    sigact.sa_handler = SIG_IGN;
+    sigact.sa_flags = SA_RESTART;
+
+    sigaction(SIGTTIN, &sigact, NULL);
     
     /* シグナルSIGTTOUのハンドラを設定 */
     sigact.sa_handler = SIG_IGN;
-    sigact.sa_flags = 0;
+    sigact.sa_flags = SA_RESTART;
     
+    sigaction(SIGTTOU, &sigact, NULL);
+}
+
+/*
+ * シグナルハンドラのリセット
+ */
+void reset_signal_handlers()
+{
+    struct sigaction sigact;
+
+    memset(&sigact, 0, sizeof(sigact));
+
+    /* シグナルハンドラを起動したシグナル以外はブロックしない */
+    sigemptyset(&sigact.sa_mask);
+    sigact.sa_handler = SIG_DFL;
+    sigact.sa_flags = 0;
+
+    /* シグナルSIGINTのハンドラを設定 */
+    sigaction(SIGINT, &sigact, NULL);
+
+    /* シグナルSIGQUITのハンドラを設定 */
+    sigaction(SIGQUIT, &sigact, NULL);
+
+    /* シグナルSIGTSTPのハンドラを設定 */
+    sigaction(SIGTSTP, &sigact, NULL);
+
+    /* シグナルSIGCHLDのハンドラを設定 */
+    sigaction(SIGCHLD, &sigact, NULL);
+
+    /* シグナルSIGTTINのハンドラを設定 */
+    sigaction(SIGTTIN, &sigact, NULL);
+    
+    /* シグナルSIGTTOUのハンドラを設定 */
     sigaction(SIGTTOU, &sigact, NULL);
 }
 
@@ -756,13 +813,13 @@ void execute_command(const struct command* cmd, bool* is_exit)
     pid_t pgid_old = -1;
     pid_t pgid_child = -1;
 
-    char* path;
+    char* path = NULL;
 
-    struct shell_command* shell_cmd;
-    struct redirect_info* redir_info;
-    struct simple_command* simple_cmd;
+    struct shell_command* shell_cmd = NULL;
+    struct redirect_info* redir_info = NULL;
+    struct simple_command* simple_cmd = NULL;
 
-    builtin_command builtin_cmd;
+    builtin_command builtin_cmd = NULL;
 
     /* 標準入力と標準出力のファイル記述子を保存 */
     if ((fd_actual_stdin = dup(STDIN_FILENO)) == -1) {
@@ -862,8 +919,16 @@ void execute_command(const struct command* cmd, bool* is_exit)
             if (dup2_close(fd_out, STDOUT_FILENO) < 0)
                 goto cleanup;
 
-            /* ビルトインコマンドを探索 */
-            if ((builtin_cmd = search_builtin_command(simple_cmd->arguments[0])) != NULL) {
+            /* コマンドの絶対パスを取得 */
+            if ((path = search_path(simple_cmd->arguments[0])) == NULL) {
+                /* ビルトインコマンドを探索 */
+                if ((builtin_cmd = search_builtin_command(simple_cmd->arguments[0])) == NULL) {
+                    print_error(__func__,
+                        "search_path() failed: No such file or directory: '%s'\n",
+                        simple_cmd->arguments[0]);
+                    continue;
+                }
+                
                 if (shell_cmd->exec_mode != EXECUTE_IN_BACKGROUND) {
                     /* ビルトインコマンドを呼び出し */
                     (*builtin_cmd)(simple_cmd->num_arguments,
@@ -887,8 +952,7 @@ void execute_command(const struct command* cmd, bool* is_exit)
             
             if (cpid == 0) {
                 /* 子プロセスの処理 */
-                
-                /* ビルトインコマンドをバックグラウンド実行(用途不明) */
+                /* ビルトインコマンドをバックグラウンド実行 */
                 if (shell_cmd->exec_mode == EXECUTE_IN_BACKGROUND &&
                     builtin_cmd != NULL) {
                     (*builtin_cmd)(simple_cmd->num_arguments,
@@ -896,20 +960,15 @@ void execute_command(const struct command* cmd, bool* is_exit)
                                    is_exit);
                     exit(EXIT_SUCCESS);
                 }
-
-                /* コマンドの絶対パスを取得 */
-                if ((path = search_path(simple_cmd->arguments[0])) == NULL) {
-                    print_error(__func__,
-                        "search_path() failed: No such file or directory: '%s'\n",
-                        simple_cmd->arguments[0]);
-                    exit(EXIT_FAILURE);
-                }
-
+                
                 if (app_config.is_debug_mode)
                     print_message(__func__, "search_path(): %s\n", path);
 
                 /* 出力バッファの内容が破棄される前に表示 */
                 fflush(NULL);
+
+                /* シグナルハンドラの設定を元に戻す */
+                reset_signal_handlers();
 
                 /* コマンドを実行 */
                 execve(path, simple_cmd->arguments, environ);
