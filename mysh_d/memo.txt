@@ -1,0 +1,162 @@
+
+情報工学科 学籍番号61610117 杉浦 圭祐
+memo.txt
+
+1. 'make'コマンドを実行すると同じディレクトリ内に実行ファイル、objディレクトリ内にオブジェクトファイルや中間ファイルが生成されます。'make clean'を実行すると、objディレクトリ内のファイルが全て削除されます。'make debug'を実行すると、'-ggdb'オプションをつけて各ソースファイルがコンパイルされるため、gdbでデバッグ可能な実行ファイルが生成されます。
+
+2. 以下のような文法に従っているコマンドを解釈することができます。
+
+    <Command> ::= <ShellCommand> [<ShellCommandOp> <ShellCommand>]* <ShellCommandOp>?
+    <ShellCommand> ::= <SimpleCommandList>
+    <ShellCommandOp> ::= '&&' | '||' | '&' | ';'
+    <SimpleCommandList> ::= <SimpleCommand> ['|' <SimpleCommand>]*
+    <SimpleCommand> ::= <Identifier> [<SimpleCommandElement>]*
+    <SimpleCommandElement> ::= <Identifier> | <Redirection>
+    <Redirection> ::= '>' <Identifier>
+                    | '<' <Identifier>
+                    | '>>' <Identifier>
+
+トークンが二重引用符または一重引用符で囲まれている場合は、単に引用符を取り除いたトークンとして認識されるため、チルダ、環境変数、ワイルドカードの展開が実行されます。
+
+    > cat hoge && cat main.c | head -n 10 | tail -n 5
+    cat: hoge: そのようなファイルやディレクトリはありません
+
+    > cat hoge || cat main.c | head -n 5             
+    cat: hoge: そのようなファイルやディレクトリはありません
+
+    /* 情報工学科3年 学籍番号61610117 杉浦 圭祐 */
+    /* main.c */
+
+    #include <stdbool.h>
+
+    > ls hoge && ls fuga && ls piyo
+    ls: 'hoge' にアクセスできません: そのようなファイルやディレクトリはありません
+
+    > ls hoge || ls fuga && ls piyo
+    ls: 'hoge' にアクセスできません: そのようなファイルやディレクトリはありません
+    ls: 'fuga' にアクセスできません: そのようなファイルやディレクトリはありません
+
+    > ls hoge || ls fuga || ls piyo
+    ls: 'hoge' にアクセスできません: そのようなファイルやディレクトリはありません
+    ls: 'fuga' にアクセスできません: そのようなファイルやディレクトリはありません
+    ls: 'piyo' にアクセスできません: そのようなファイルやディレクトリはありません
+    
+    > ls -l | sort -n -r -k 5 | head -n 5
+    -rwxr-xr-x 1 stern stern 60704 12月  1 19:26 mysh
+    -rw-r--r-- 1 stern stern 35964 12月  1 17:11 shell.c
+    -rw-r--r-- 1 stern stern 30767 12月  1 18:36 input.c
+    -rw-r--r-- 1 stern stern 26054 12月  1 15:27 parser.c
+    -rw-r--r-- 1 stern stern 15945 11月 27 18:20 lexer.c
+
+    > sleep 8 & sleep 6 & sleep 4 & sleep 2 &
+
+    > echo 1 & echo 2 & echo 3 & echo 4 &
+    > 4
+    3
+    2
+    1
+    
+    > > wc < hoge < fuga < main.c | cat > hehe > foo > wc.out
+    > cat wc.out
+    130  229 3471
+
+1) '&&'で2つのコマンドを区切ると、以前に実行したコマンドの戻り値が0であるとき(成功したとき)にのみ、次のコマンドを実行することができます。
+
+2) '||'で2つのコマンドを区切ると、以前に実行したコマンドの戻り値が0でないとき(失敗したとき)にのみ、次のコマンドを実行することができます。
+
+3) ';'は、単に2つのコマンドの区切り文字として使われます(2つのコマンドは戻り値に関わらず連続して実行されます)。一番最後のコマンドには';'または'&'の記号を使用できます('&&'や'||'を指定するとエラーになります)。
+
+4) リダイレクト記号として'>>'を指定すると、標準出力への出力内容を、その後に指定されたファイルに対して追記します。リダイレクト指定が複数ある場合は、一番最後のものが使用されます。
+
+3. 入力された個々のトークンに対しては次のような展開が実行されます。
+
+5) トークンの先頭がチルダである場合は次のように展開されます。環境変数HOMEが'/home/stern'、環境変数PWDが'/home/stern/unisys/mysh/mysh_d'であると仮定します。トークンが二重引用符や一重引用符で囲まれている場合も、チルダの展開が実行されてしまいます(本当は展開してはいけない)。shell.cのexpand_tilde()関数を参照してください。
+
+    > echo ~
+    /home/stern
+
+    > echo ~/
+    /home/stern/
+
+    > echo ~/foo/bar
+    /home/stern/foo/bar
+    
+    > echo ~+
+    /home/stern/unisys/mysh/mysh_d
+    
+    > echo ~+/foo/bar
+    /home/stern/unisys/mysh/mysh_d/foo/bar
+
+    > echo ~stern
+    /home/stern
+
+    > echo ~root
+    /root
+
+    > echo ~stern/hoge
+    /home/stern/hoge
+
+    > echo ~not-a-user
+    ~not-a-user
+
+6) トークンに$が含まれる場合は環境変数として認識されます。トークンが二重引用符や一重引用符で囲まれている場合も、展開が実行されてしまいます(本当は展開してはいけない)。shell.cのexpand_variable()関数を参照してください。
+
+    > echo My name is $USER and I speak $LANG
+    My name is stern and I speak ja_JP.UTF-8
+
+    > echo $NOTENV
+    $NOTENV
+
+    > echo My favorite shell is $SHELL
+    My favorite shell is /bin/bash
+
+    > echo $HOGE$HOME$HOGE
+    $HOGE/home/stern$HOGE
+    
+    > echo ~/myapp/users/$USER/
+    /home/stern/myapp/users/stern/
+
+7) ワイルドカードが展開されます。トークンが二重引用符や一重引用符で囲まれている場合も、ワイルドカードの展開が実行されてしまいます(本当は展開してはいけない)。shell.cのexpand_wildcard()関数を参照してください。
+
+    > echo *.c
+    builtin.c dynamic_string.c history.c input.c lexer.c main.c parser.c shell.c util.c
+
+    > echo *.c *.h
+    builtin.c dynamic_string.c history.c input.c lexer.c main.c parser.c shell.c util.c builtin.h dynamic_string.h history.h input.h lexer.h linked_list.h parser.h shell.h util.h
+
+    > wc -l *.c | head -n -1 | sort -n -r
+    1045 shell.c
+     983 input.c
+     791 parser.c
+     485 lexer.c
+     329 dynamic_string.c
+     205 builtin.c
+     130 main.c
+     121 util.c
+     105 history.c
+
+4. '-r'または'--raw'オプションをつけて起動すると、端末がcbreakモードに設定された上で、ユーザからの入力を受け取るようになります。以下の操作が有効になります。
+
+    Ctrl-A          カーソルを左端に移動
+    Ctrl-E          カーソルを右端に移動
+    Ctrl-B          カーソルを1つ左に移動
+    Ctrl-F          カーソルを1つ右に移動
+    Ctrl-P          以前に入力したコマンドを順に表示(1つ前の履歴)
+    Ctrl-N          以前に入力したコマンドを順に表示(1つ後の履歴)
+    上方向キー      以前に入力したコマンドを順に表示(1つ前の履歴)
+    下方向キー      以前に入力したコマンドを順に表示(1つ後の履歴)
+    右方向キー      カーソルを1つ右に移動
+    左方向キー      カーソルを1つ左に移動
+    Backspaceキー   カーソルの直前の文字を消去
+    Ctrl-H          カーソルの直前の文字を消去
+    Delキー         カーソル上の文字を消去
+    Ctrl-D          カーソル上の文字を消去
+    Tabキー         ファイル名の補完
+    Enterキー       入力の確定
+
+コマンドの入力が2行以上になると、上方向キー、下方向キー、Ctrl-P、Ctrl-Nでの操作に多少の不具合が生じます。コマンドの履歴はhistoryビルトインコマンドにより表示できます(シェルをすると履歴は全て破棄されます)。Tabキーによるファイル名の補完については機能がかなり制限されています。カレントディレクトリ内のファイルの補完にしか対応していません。
+
+5. '-d'または'--debug'オプションをつけて起動すると、デバッグ出力が表示されます。
+
+6. ビルトインコマンドには、help、cd、pwd、history、exitの5つが用意されています。
+
