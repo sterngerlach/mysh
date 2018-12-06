@@ -821,6 +821,13 @@ char* get_line_cbreak()
                                     return NULL;
                                 }
                                 break;
+                            case '3':
+                                /* Delキーの処理 */
+                                if (!handle_ctrl_d(&input_buffer, &pos, ch)) {
+                                    print_error(__func__, "handle_ctrl_d() failed\n");
+                                    return NULL;
+                                }
+                                break;
                         }
                     }
                 } else {

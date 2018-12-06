@@ -108,18 +108,14 @@ int main(int argc, char** argv)
 
         if (app_config.is_raw_mode)
             tty_set_cbreak();
-        
-        if (is_exit)
-            break;
 
         free_command(&cmd);
         free_token_stream(&tok_stream);
         free(input);
+        
+        if (is_exit)
+            break;
     }
-
-    free_command(&cmd);
-    free_token_stream(&tok_stream);
-    free(input);
 
     /* コマンドの履歴を破棄 */
     free_command_history(&command_history_head);
